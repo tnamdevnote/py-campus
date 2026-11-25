@@ -25,45 +25,57 @@ Colors are '#rrggbb' hex strings.
 #   height    wall height
 #   door      which way the front door faces: "north", "south", "east", "west"
 # Optional keys:
+#   style        "storefront" (glass shopfront, awning, flat roof),
+#                "campus" (terracotta hip roof, tall windows), or
+#                "apartment" (flat roof, plain window grid). Default storefront.
 #   enterable    True = hollow with an open doorway you can walk through
 #   color        wall color
 #   roof         roof color
-#   trim         color of the sign board and door frame
+#   trim         color of the sign board, door frame and awning
+#   accent       color of the cornice, corners and window frames
+#                (default: a lighter version of `color`)
 #   sign         text on the sign above the door ("" for no sign)
-#   floors       number of window rows on the front (default from height)
 #   interior     "shop", "cafe", "books", "classroom", or "empty"
+#   floors       number of window rows (default from height)
+# You can also override any style setting per building, for example
+#   awning=False, roof_style="hip", pilasters=False, storefront=True,
+#   window_width=1.4, window_height=2.0, awning_color="#2f5d50".
 BUILDINGS = [
     # --- The Drag: west side of Guadalupe, doors facing the street (east) ---
     dict(
         name="University Co-op", x=-20, z=-14, width=22, depth=16, height=9,
-        door="east", enterable=True, color="#a2593a", roof="#5c3a2b",
-        trim="#bf5700", sign="CO-OP", interior="shop",
+        door="east", style="storefront", enterable=True,
+        color="#b0603f", roof="#6b4a3a", trim="#bf5700", accent="#e8d6b5",
+        sign="CO-OP", interior="shop",
     ),
     dict(
-        name="Drag Coffee", x=-18, z=6, width=12, depth=12, height=6,
-        door="east", enterable=True, color="#e6d2a8", roof="#6d4c3d",
-        trim="#2f5d50", sign="COFFEE", interior="cafe",
+        name="Drag Coffee", x=-18, z=6, width=12, depth=12, height=6.5,
+        door="east", style="storefront", enterable=True,
+        color="#ecdcb8", roof="#7a5a48", trim="#3f7262", sign="COFFEE", interior="cafe",
     ),
     dict(
-        name="Half Price Books", x=-20, z=24, width=16, depth=16, height=7,
-        door="east", enterable=True, color="#7f9bb0", roof="#3f4e5a",
-        trim="#f2c14e", sign="BOOKS", interior="books",
+        name="Half Price Books", x=-20, z=24, width=16, depth=16, height=7.5,
+        door="east", style="storefront", enterable=True,
+        color="#8eaabd", roof="#4d5c68", trim="#d9a441", accent="#eef2f4",
+        sign="BOOKS", interior="books",
     ),
     dict(
         name="Guad Apartments", x=-22, z=46, width=18, depth=18, height=18,
-        door="east", enterable=False, color="#c7b9a5", roof="#5b5650",
-        trim="#7a6a58", sign="",
+        door="east", style="apartment", enterable=False,
+        color="#d8cab4", roof="#6b6660", trim="#8b7a66", sign="",
     ),
     # --- Campus: east side, along the West Mall ---
     dict(
         name="Battle Hall", x=44, z=-20, width=24, depth=14, height=10,
-        door="north", enterable=True, color="#e2d3ad", roof="#b8613f",
-        trim="#9a7b4f", sign="BATTLE HALL", interior="classroom",
+        door="north", style="campus", enterable=True,
+        color="#ecdcb6", roof="#c4673f", trim="#9a7b4f", accent="#f7efdc",
+        sign="BATTLE HALL", interior="classroom",
     ),
     dict(
         name="Texas Union", x=44, z=22, width=26, depth=16, height=12,
-        door="south", enterable=False, color="#d9c39a", roof="#b8613f",
-        trim="#bf5700", sign="TEXAS UNION",
+        door="south", style="campus", enterable=False,
+        color="#e4cfa4", roof="#c4673f", trim="#bf5700", accent="#f7efdc",
+        sign="TEXAS UNION",
     ),
 ]
 
@@ -78,7 +90,7 @@ TOWER = dict(
     building_height=14,
     tower_size=12,          # square footprint of the tower shaft
     tower_height=60,        # top of the shaft, from the ground
-    spire_height=18,
+    spire_height=13,
     color="#e2d3ad",
     accent="#c9b27f",
     roof="#b8613f",

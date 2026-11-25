@@ -17,10 +17,10 @@ pip install -r requirements.txt
 python main.py
 ```
 
-If the window opens and then the game crashes right away, your graphics driver can't handle the lighting shader. Run the unlit version instead:
+The default look uses baked low-poly shading, a gradient sky, and soft fog, so it works on any graphics card. For real-time sun shadows on a machine with a proper GPU, run:
 
 ```bash
-python main.py --flat
+python main.py --shadows
 ```
 
 ## Controls
@@ -57,12 +57,15 @@ dict(
     x=-18, z=6,                 # center of the footprint (x = east, z = north)
     width=12, depth=12, height=6,
     door="east",                # which way the front door faces
+    style="storefront",         # "storefront", "campus", or "apartment"
     enterable=True,             # hollow with an open doorway
     color="#e6d2a8", roof="#6d4c3d", trim="#2f5d50",
     sign="COFFEE",
     interior="cafe",            # "shop", "cafe", "books", "classroom", or "empty"
 ),
 ```
+
+The `style` picks a look: `storefront` has a glass shopfront, a striped awning, and a flat roof with a parapet. `campus` has a terracotta hip roof and tall framed windows. `apartment` has a plain window grid. You can override any part of a style on one building, for example `awning=False` or `roof_style="hip"`. The comment at the top of `BUILDINGS` lists every option.
 
 In the same file you can move the tower (`TOWER`), add trees (`TREES`), lay paths (`PATHS`), change the NPC's lines (`NPCS`), and set where the player starts (`PLAYER_START`). Guadalupe Street runs along `x = 0`; the Drag is at negative `x`, campus at positive `x`.
 
@@ -71,9 +74,10 @@ In the same file you can move the tower (`TOWER`), add trees (`TREES`), lay path
 ```
 main.py              window, lighting, sky, player, and keys
 game/config.py       the world's contents: edit this to iterate
-game/buildings.py    turns a building dict into walls, door, windows, sign, furniture
+game/buildings.py    turns a building dict into walls, windows, awning, roof, sign, furniture
 game/scenery.py      ground, Guadalupe Street, paths, trees, the Main Building tower
 game/npc.py          the talkable NPC and the dialog box
 game/world.py        builds everything from config.py and handles F5 reload
-game/style.py        colors and the lit/flat shader switch
+game/meshes.py       low-poly meshes with baked shading (cube, cone, hip roof, ...)
+game/style.py        the color palette and the --shadows switch
 ```

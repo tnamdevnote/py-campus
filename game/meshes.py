@@ -8,9 +8,9 @@ graphics card.
 """
 from functools import lru_cache
 
+import math
+
 from ursina import Mesh, Vec3, color, load_model
-from ursina.models.procedural.cone import Cone
-from ursina.models.procedural.cylinder import Cylinder
 
 SUN_DIR = Vec3(0.45, 0.8, -0.35).normalized()   # points toward the sun
 SKY_FILL = 0.72    # brightness of faces turned away from the sun
@@ -70,10 +70,31 @@ def facet(verts, tris=None):
     return out_v, out_c, out_n
 
 
-def _mesh(data):
+def _mesh(data, shaded=True):
     # Each entity needs its own Mesh (a Mesh can only be attached to one entity).
     v, c, n = data
+    if not shaded:
+        c = [color.white] * len(v)
     return Mesh(vertices=v, colors=c, normals=n, mode="triangle", static=True)
+
+
+def reshade(entity):
+    """Bake shading into a combined mesh using its normals in world space.
+
+    Use this after Entity.combine(include_normals=True) on parts built with
+    shaded=False meshes, so rotated objects are still lit from the right side.
+    """
+    from panda3d.core import Vec3 as PVec3
+
+    model = entity.model
+    quat = entity.getQuat(entity.getTop())
+    new_colors = []
+    for base, n in zip(model.colors, model.normals):
+        wn = quat.xform(PVec3(*n))
+        s = _shade(Vec3(wn[0], wn[1], wn[2]))
+        new_colors.append(color.rgba(base[0] * s[0], base[1] * s[1], base[2] * s[2], base[3]))
+    model.colors = new_colors
+    model.generate()
 
 
 def _box_corners():
@@ -88,25 +109,39 @@ def _cube_data():
     return facet(*_box_corners())
 
 
-def cube():
-    return _mesh(_cube_data())
+def cube(shaded=True):
+    return _mesh(_cube_data(), shaded)
+
+
+def _ring(resolution, y, radius=0.5):
+    return [Vec3(math.sin(2 * math.pi * i / resolution) * radius, y,
+                 math.cos(2 * math.pi * i / resolution) * radius) for i in range(resolution)]
 
 
 @lru_cache(maxsize=None)
 def _cone_data(resolution):
-    m = Cone(resolution=resolution, radius=0.5, height=1)
-    return facet(m.vertices, m.triangles)
+    base, tip, mid = _ring(resolution, 0), Vec3(0, 1, 0), Vec3(0, 0, 0)
+    tris = []
+    for i in range(resolution):
+        a, b = base[i], base[(i + 1) % resolution]
+        tris += [a, b, tip, b, a, mid]
+    return facet(tris)
 
 
-def cone(resolution=7):
+def cone(resolution=7, shaded=True):
     """Cone with its base at y=0 and tip at y=1, radius 0.5."""
-    return _mesh(_cone_data(resolution))
+    return _mesh(_cone_data(resolution), shaded)
 
 
 @lru_cache(maxsize=None)
 def _cylinder_data(resolution):
-    m = Cylinder(resolution=resolution, radius=0.5, height=1)
-    return facet(m.vertices, m.triangles)
+    lo, hi = _ring(resolution, 0), _ring(resolution, 1)
+    tris = []
+    for i in range(resolution):
+        j = (i + 1) % resolution
+        tris += [lo[i], lo[j], hi[j], lo[i], hi[j], hi[i],
+                 lo[i], lo[j], Vec3(0, 0, 0), hi[i], hi[j], Vec3(0, 1, 0)]
+    return facet(tris)
 
 
 def cylinder(resolution=6):
@@ -114,8 +149,27 @@ def cylinder(resolution=6):
     return _mesh(_cylinder_data(resolution))
 
 
+def hip_roof(width, depth, rise, shaded=True):
+    """A hip roof over a width x depth rectangle, base at y=0, ridge on top.
+
+    The ridge runs along the longer side, so it looks right on long buildings.
+    """
+    w, d = width / 2, depth / 2
+    if width >= depth:
+        r1, r2 = Vec3(-(w - d), rise, 0), Vec3(w - d, rise, 0)
+    else:
+        r1, r2 = Vec3(0, rise, -(d - w)), Vec3(0, rise, d - w)
+    a, b, c, e = Vec3(-w, 0, -d), Vec3(w, 0, -d), Vec3(w, 0, d), Vec3(-w, 0, d)
+    if width >= depth:
+        tris = [a, b, r2, a, r2, r1,  b, c, r2,  c, e, r1, c, r1, r2,  e, a, r1]
+    else:
+        tris = [a, b, r1,  b, c, r2, b, r2, r1,  c, e, r2,  e, a, r1, e, r1, r2]
+    tris += [a, c, b, a, e, c]   # underside
+    return _mesh(facet(tris), shaded)
+
+
 def blob(seed=0):
-    """A lumpy low-poly ball (radius about 0.5) for tree canopies and bushes."""
+    """A lumpy low-poly ball (radius about 1) for tree canopies and bushes."""
     return _mesh(_blob_data(seed % 6))
 
 

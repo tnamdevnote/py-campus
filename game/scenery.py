@@ -1,7 +1,7 @@
 """Ground, Guadalupe Street, paths, trees, and the Main Building tower."""
 from ursina import Entity, scene
 from . import meshes, style
-from .style import col, shaded
+from .style import col, shade_of, shaded
 
 STREET_HALF_WIDTH = 6
 SIDEWALK_WIDTH = 5
@@ -77,44 +77,70 @@ def build_trees(positions, parent=scene):
 
 def build_tower(spec, parent=scene):
     """The Main Building with its tall tower and spire, facing west down the mall."""
+    from .buildings import build_building
+
     root = Entity(parent=parent, position=(spec["x"], 0, spec["z"]), name=spec["name"])
     c, accent, roof = spec["color"], spec["accent"], spec["roof"]
     bw, bd, bh = spec["building_width"], spec["building_depth"], spec["building_height"]
     ts, th, sh = spec["tower_size"], spec["tower_height"], spec["spire_height"]
+    trim = "#f7efdc"
+
+    # The Main Building itself uses the same builder as everything else.
+    build_building(dict(
+        name=spec["name"], x=0, z=0, width=bw, depth=bd, height=bh, door="west",
+        style="campus", enterable=False, color=c, roof=roof, trim=accent, accent=trim,
+        sign="", window_height=2.4,
+    ), parent=root)
 
     def box(pos, scale, color, collider=True):
-        return Entity(parent=root, model=meshes.cube(), position=pos, scale=scale, color=col(color),
-                      collider="box" if collider else None, **shaded())
+        return Entity(parent=root, model=meshes.cube(), position=pos, scale=scale,
+                      color=col(color), collider="box" if collider else None, **shaded())
 
-    # Main Building: long north-south block (x is depth, z is width).
-    box((0, bh / 2, 0), (bd, bh, bw), c)
-    box((0, bh + 0.4, 0), (bd + 1, 0.8, bw + 1), roof)
-    # Front steps and portico columns facing west.
+    # Front steps and a portico of columns facing west.
     for i in range(3):
-        box((-bd / 2 - 1 - i, 0.2 + i * 0.2, 0), (2, 0.4 + i * 0.4, 16 - i * 2), accent)
+        box((-bd / 2 - 3.2 + i * 0.8, 0.15 + i * 0.3, 0), (2.4 - i * 0.8 + 2, 0.3 + i * 0.6,
+            20 - i * 2), accent)
     for z in range(-6, 7, 3):
-        box((-bd / 2 - 1.2, bh * 0.4, z), (0.9, bh * 0.8, 0.9), "#f1e8d2")
+        Entity(parent=root, model=meshes.cylinder(8), position=(-bd / 2 - 1.4, 1.2, z),
+               scale=(0.9, bh - 2.4, 0.9), color=col(trim), collider="box", **shaded())
+    box((-bd / 2 - 1.4, bh - 0.9, 0), (1.6, 0.9, 16), trim)              # entablature
+
     # Tower shaft, set back from the front of the building.
     tx = 2
     box((tx, th / 2, 0), (ts, th, ts), c)
-    # Vertical window slots on the shaft.
-    for side in (-1, 1):
-        for k in (-ts / 4, ts / 4):
-            box((tx - ts / 2 - 0.05, bh + (th - bh) / 2, k), (0.1, th - bh - 8, 1.0),
-                "#5a5245", collider=False)
-            box((tx + k, bh + (th - bh) / 2, side * (ts / 2 + 0.05)), (1.0, th - bh - 8, 0.1),
-                "#5a5245", collider=False)
-    # Observation deck (wider band) and clock stage.
-    box((tx, th + 2, 0), (ts + 2, 4, ts + 2), accent)
-    box((tx, th + 5.5, 0), (ts - 1, 3, ts - 1), c)
-    for dx, dz, sx, sz in ((-1, 0, 0.1, 3), (1, 0, 0.1, 3), (0, -1, 3, 0.1), (0, 1, 3, 0.1)):
-        box((tx + dx * ((ts - 1) / 2 + 0.06), th + 5.5, dz * ((ts - 1) / 2 + 0.06)),
-            (sx, 2.4, sz), "#fbf7ee", collider=False)  # clock faces
-    box((tx, th + 7.4, 0), (ts, 0.8, ts), roof)
-    # Spire: a square pyramid.
-    Entity(parent=root, model=meshes.cone(4), position=(tx, th + 7.8, 0), rotation_y=45,
+    # Corner piers and vertical window bays on every side.
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            box((tx + sx * (ts / 2 - 0.3), bh + (th - bh) / 2, sz * (ts / 2 - 0.3)),
+                (1.0, th - bh, 1.0), trim, collider=False)
+    slot_h = th - bh - 8
+    for k in (-ts / 4, 0, ts / 4):
+        for side in (-1, 1):
+            box((tx + side * (ts / 2 + 0.04), bh + 2 + slot_h / 2, k), (0.1, slot_h, 1.1),
+                "#56606a", collider=False)
+            box((tx + k, bh + 2 + slot_h / 2, side * (ts / 2 + 0.04)), (1.1, slot_h, 0.1),
+                "#56606a", collider=False)
+    # Observation deck: a cornice, a ring of columns, and a cap.
+    box((tx, th + 0.3, 0), (ts + 2.4, 0.6, ts + 2.4), trim)
+    for i in range(-2, 3):
+        for x, z in ((i * ts / 5, -(ts / 2 + 0.6)), (i * ts / 5, ts / 2 + 0.6),
+                     (-(ts / 2 + 0.6), i * ts / 5), (ts / 2 + 0.6, i * ts / 5)):
+            Entity(parent=root, model=meshes.cylinder(6), position=(tx + x, th + 0.6, z),
+                   scale=(0.5, 3.2, 0.5), color=col(trim), **shaded())
+    box((tx, th + 2.2, 0), (ts - 0.5, 3.2, ts - 0.5), shade_of(c, -0.25), collider=False)
+    box((tx, th + 4.1, 0), (ts + 2.4, 0.6, ts + 2.4), trim)
+    # Clock stage with a clock face on each side.
+    box((tx, th + 6.0, 0), (ts - 1.5, 3.2, ts - 1.5), c)
+    half = (ts - 1.5) / 2 + 0.06
+    for dx, dz, sx, sz in ((-1, 0, 0.1, 2.4), (1, 0, 0.1, 2.4), (0, -1, 2.4, 0.1), (0, 1, 2.4, 0.1)):
+        box((tx + dx * half, th + 6.0, dz * half), (sx, 2.4, sz), "#fbf7ee", collider=False)
+        box((tx + dx * (half + 0.05), th + 6.2, dz * (half + 0.05)),
+            (max(sx, 0.06) if sx < 1 else 0.15, 0.9, max(sz, 0.06) if sz < 1 else 0.15),
+            "#2f2f2f", collider=False)                                   # clock hand
+    box((tx, th + 7.8, 0), (ts - 0.5, 0.5, ts - 0.5), trim)
+    # Spire: a square pyramid with a gold finial.
+    Entity(parent=root, model=meshes.cone(4), position=(tx, th + 8.0, 0), rotation_y=45,
            scale=((ts - 2) * 1.414, sh, (ts - 2) * 1.414), color=col(roof), **shaded())
-    # A small gold finial on top.
-    Entity(parent=root, model=meshes.blob(1), position=(tx, th + 7.8 + sh, 0), scale=0.8,
+    Entity(parent=root, model=meshes.blob(1), position=(tx, th + 8.0 + sh, 0), scale=0.5,
            color=col("#e0b84a"), **shaded())
     return root

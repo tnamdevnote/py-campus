@@ -24,6 +24,11 @@ def col(value):
     return value
 
 
+def shade_of(value, amount):
+    """Lighter (amount > 0) or darker (amount < 0) version of a color."""
+    return col(value).tint(amount)
+
+
 # One cohesive palette: warm limestone and terracotta, sage greens, soft
 # asphalt. Buildings pick their own colors in config.py; try to stay close
 # to these so everything sits together.
