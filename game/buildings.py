@@ -7,6 +7,7 @@ and a little furniture. Other buildings are a solid block.
 """
 from ursina import Entity, Text, scene
 
+from . import meshes
 from .style import col, shaded, GLASS
 
 # Ursina's rotation_y that makes local -z (the front) face each direction.
@@ -30,7 +31,7 @@ def facing_rotation(direction):
 def _box(parent, position, scale, color, collider=True, **kwargs):
     return Entity(
         parent=parent,
-        model="cube",
+        model=meshes.cube(),
         position=position,
         scale=scale,
         color=col(color),

@@ -2,6 +2,7 @@
 from ursina import Entity, Text, camera, color, distance_xz, scene
 
 from .buildings import facing_rotation
+from . import meshes
 from .style import col, shaded
 
 TALK_DISTANCE = 4.0
@@ -25,8 +26,8 @@ class NPC(Entity):
         skin, shirt = spec.get("skin", "#c68e63"), spec.get("shirt", "#bf5700")
         pants, hair = spec.get("pants", "#2e3a4f"), spec.get("hair", "#2b1d14")
 
-        def part(pos, scale, c, model="cube"):
-            Entity(parent=self, model=model, position=pos, scale=scale, color=col(c), **shaded())
+        def part(pos, scale, c):
+            Entity(parent=self, model=meshes.cube(), position=pos, scale=scale, color=col(c), **shaded())
 
         for sx in (-0.17, 0.17):
             part((sx, 0.45, 0), (0.28, 0.9, 0.3), pants)          # legs

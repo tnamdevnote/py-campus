@@ -1,19 +1,20 @@
 """Shared rendering style: colors and the shader switch.
 
-`--flat` on the command line turns off the lit shader and shadows, for
-graphics drivers that can't compile it (see README).
+By default the game uses baked low-poly shading (see meshes.py) with fog,
+which runs on any graphics card. `--shadows` on the command line switches to
+Ursina's real-time lit shader with sun shadows, which needs a proper GPU.
 """
 import sys
 
 from ursina import color as ucolor
 from ursina.shaders import lit_with_shadows_shader
 
-FLAT = "--flat" in sys.argv
+LIT = "--shadows" in sys.argv
 
 
 def shaded():
     """Keyword args that give an Entity the lit, shadow-receiving shader."""
-    return {} if FLAT else {"shader": lit_with_shadows_shader}
+    return {"shader": lit_with_shadows_shader} if LIT else {}
 
 
 def col(value):
@@ -23,17 +24,23 @@ def col(value):
     return value
 
 
-# Palette used by the scenery. Buildings pick their own colors in config.py.
-GRASS = "#7aa95c"
-ROAD = "#4a4a50"
-SIDEWALK = "#c9c3b6"
-PAVER = "#d6c3a0"
-LANE_YELLOW = "#e8c547"
-LANE_WHITE = "#f2f0ea"
-LIMESTONE = "#e2d3ad"
-LIMESTONE_DARK = "#c9b27f"
-TERRACOTTA = "#b8613f"
-TRUNK = "#6b4a32"
-LEAF = "#4f8a3c"
-LEAF_DARK = "#3e7431"
-GLASS = "#5f86a6"
+# One cohesive palette: warm limestone and terracotta, sage greens, soft
+# asphalt. Buildings pick their own colors in config.py; try to stay close
+# to these so everything sits together.
+SKY_TOP = "#5b97d6"
+SKY_HORIZON = "#f3dcc0"
+FOG = "#e9dccb"
+GRASS = "#8fb56a"
+ROAD = "#55565c"
+SIDEWALK = "#d9d1c3"
+CURB = "#bdb4a5"
+PAVER = "#e0caa3"
+LANE_YELLOW = "#f0c54e"
+LANE_WHITE = "#f4f1ea"
+LIMESTONE = "#ecdcb6"
+LIMESTONE_DARK = "#d2bb8b"
+TERRACOTTA = "#c4673f"
+TRUNK = "#7a5a3e"
+LEAF = "#6fa152"
+LEAF_DARK = "#4f8a46"
+GLASS = "#7fa7c4"
