@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forest Chat</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1a14; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; cursor: pointer; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .tag { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 6px; white-space: nowrap; }
+  .name { pointer-events: auto; cursor: pointer; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+  .name.me { background: rgba(255,140,40,.85); }
+  .bubble { max-width: 220px; white-space: normal; text-align: center; background: #fff; color: #222; padding: 6px 10px; border-radius: 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.35); position: relative; animation: pop .15s ease-out; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: #fff; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  #hud { position: fixed; top: 12px; left: 12px; color: #e8f3ea; font-size: 13px; background: rgba(0,0,0,.4); padding: 8px 12px; border-radius: 10px; line-height: 1.5; }
+  #chat { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(480px, calc(100% - 32px)); }
+  #chat input { width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 22px; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.55); color: #fff; font-size: 15px; outline: none; }
+  #chat input:focus { border-color: #ffa24a; background: rgba(0,0,0,.75); }
+  #join { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,12,9,.45); }
+  #join form { background: rgba(18,32,24,.92); color: #fff; padding: 22px 24px; border-radius: 16px; width: min(320px, calc(100% - 32px)); box-sizing: border-box; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  #join h1 { margin: 0 0 4px; font-size: 22px; }
+  #join p { margin: 0 0 14px; opacity: .75; font-size: 13px; }
+  #join input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 0; font-size: 16px; margin-bottom: 10px; }
+  #join button { width: 100%; padding: 10px; border: 0; border-radius: 10px; background: #ff8c28; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+  #msg { margin-top: 10px; color: #ffb4a0; font-size: 13px; min-height: 1em; }
+  .hidden { display: none !important; }
+</style>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="labels"></div>
+<div id="hud" class="hidden"><b id="count">1</b>/10 at the campfire<br>Arrow keys: walk · Enter: chat<br>Click someone: zoom in · Esc: zoom out</div>
+<div id="chat" class="hidden"><input id="chatInput" maxlength="120" placeholder="Press Enter to chat" autocomplete="off"></div>
+<div id="join">
+  <form id="joinForm">
+    <h1>🔥 Forest Chat</h1>
+    <p>Pick a nickname and step up to the fire.</p>
+    <input id="nameInput" maxlength="16" autocomplete="off" aria-label="Nickname">
+    <button type="submit">Join</button>
+    <div id="msg"></div>
+  </form>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- Scene: a small forest with a campfire ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1b2a3a);
+scene.fog = new THREE.Fog(0x1b2a3a, 18, 45);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 9, 14);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.HemisphereLight(0x8fb4d9, 0x2a3b22, 0.9));
+const moon = new THREE.DirectionalLight(0xb8c8ff, 0.6);
+moon.position.set(-10, 20, 8);
+scene.add(moon);
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshLambertMaterial({ color: 0x2f5a2c }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+const clearing = new THREE.Mesh(new THREE.CircleGeometry(6, 40), new THREE.MeshLambertMaterial({ color: 0x5a4a32 }));
+clearing.rotation.x = -Math.PI / 2;
+clearing.position.y = 0.01;
+clearing.receiveShadow = true;
+scene.add(clearing);
+
+// Same seeded forest for everyone.
+let seed = 7;
+const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const trees = []; // { x, z, r } for collision
+const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5b3a1e });
+const leafMats = [0x1f4d2b, 0x2a5e32, 0x234a2a].map((c) => new THREE.MeshLambertMaterial({ color: c }));
+for (let i = 0; i < 70; i++) {
+  const a = rand() * Math.PI * 2, d = 8 + rand() * 22;
+  const x = Math.cos(a) * d, z = Math.sin(a) * d, s = 0.8 + rand() * 0.7;
+  const tree = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.25 * s, 1.4 * s, 7), trunkMat);
+  trunk.position.y = 0.7 * s;
+  tree.add(trunk);
+  for (let k = 0; k < 3; k++) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry((1.5 - k * 0.35) * s, 1.8 * s, 8), leafMats[(i + k) % 3]);
+    cone.position.y = (1.7 + k * 0.9) * s;
+    cone.castShadow = true;
+    tree.add(cone);
+  }
+  tree.position.set(x, 0, z);
+  tree.rotation.y = rand() * 6;
+  scene.add(tree);
+  trees.push({ x, z, r: 0.45 * s + 0.35 });
+}
+
+// Campfire: stones, logs, flickering flames and light.
+const fire = new THREE.Group();
+const stoneMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+for (let i = 0; i < 10; i++) {
+  const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), stoneMat);
+  const a = (i / 10) * Math.PI * 2;
+  st.position.set(Math.cos(a) * 0.85, 0.12, Math.sin(a) * 0.85);
+  fire.add(st);
+}
+for (let i = 0; i < 3; i++) {
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2, 6), trunkMat);
+  log.rotation.z = Math.PI / 2;
+  log.rotation.y = (i / 3) * Math.PI;
+  log.position.y = 0.15;
+  fire.add(log);
+}
+const flames = [[0xff5a1a, 0.45, 1.1], [0xff9a2a, 0.32, 0.85], [0xffe07a, 0.18, 0.55]].map(([c, r, h]) => {
+  const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9 }));
+  f.position.y = 0.2 + h / 2;
+  f.userData.h = h;
+  fire.add(f);
+  return f;
+});
+const fireLight = new THREE.PointLight(0xff8a3a, 30, 16, 1.6);
+fireLight.position.y = 1.2;
+fireLight.castShadow = true;
+fire.add(fireLight);
+scene.add(fire);
+const FIRE_R = 1.3;
+
+// ---------- Characters ----------
+const players = new Map(); // id -> { group, tag, bubbleEl, bubbleTimer, target, data }
+const labels = document.getElementById('labels');
+const pickables = [];
+let me = null;
+
+function makeCharacter(p) {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(p.color) });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.6, 4, 10), bodyMat);
+  body.position.y = 0.65;
+  body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), new THREE.MeshLambertMaterial({ color: 0xf1c9a0 }));
+  head.position.y = 1.45;
+  head.castShadow = true;
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  for (const sx of [-0.1, 0.1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), eyeMat);
+    eye.position.set(sx, 1.5, 0.25);
+    group.add(eye);
+  }
+  group.add(body, head);
+  body.userData.id = head.userData.id = p.id;
+  pickables.push(body, head);
+  group.position.set(p.x, 0, p.z);
+  group.rotation.y = p.ry;
+  scene.add(group);
+
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  const name = document.createElement('div');
+  name.className = 'name' + (me && p.id === me.id ? ' me' : '');
+  name.textContent = p.name;
+  name.addEventListener('click', () => { zoomId = p.id; chatInput.blur(); });
+  tag.appendChild(name);
+  labels.appendChild(tag);
+  players.set(p.id, { group, tag, nameEl: name, bubbleEl: null, bubbleTimer: 0, target: { x: p.x, z: p.z, ry: p.ry }, data: p, bob: 0 });
+}
+
+function removeCharacter(id) {
+  const pl = players.get(id);
+  if (!pl) return;
+  scene.remove(pl.group);
+  for (let i = pickables.length - 1; i >= 0; i--) if (pickables[i].userData.id === id) pickables.splice(i, 1);
+  pl.tag.remove();
+  clearTimeout(pl.bubbleTimer);
+  players.delete(id);
+  if (zoomId === id) zoomId = null;
+}
+
+function showBubble(id, text) {
+  const pl = players.get(id);
+  if (!pl) return;
+  if (!pl.bubbleEl) {
+    pl.bubbleEl = document.createElement('div');
+    pl.bubbleEl.className = 'bubble';
+    pl.tag.insertBefore(pl.bubbleEl, pl.nameEl);
+  }
+  pl.bubbleEl.textContent = text;
+  pl.bubbleEl.style.animation = 'none'; void pl.bubbleEl.offsetWidth; pl.bubbleEl.style.animation = '';
+  clearTimeout(pl.bubbleTimer);
+  pl.bubbleTimer = setTimeout(() => { pl.bubbleEl?.remove(); pl.bubbleEl = null; }, 5000);
+}
+
+// ---------- Networking ----------
+// Two ways to sync players:
+//  1) Supabase Realtime, when the two values below are filled in (for static hosting such as Vercel).
+//  2) Otherwise the bundled server.js (run `node server.js`), using Server-Sent Events.
+// The Supabase "anon" / "publishable" key is designed to be public; never put a secret/service key here.
+const SUPABASE_URL = 'https://drsrjhuoehjznlbzbowm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_K7bKtSkEoOR72vaM5Osweg_o73aCWNc';
+const MAX_PLAYERS = 10;
+
+const countEl = document.getElementById('count');
+const updateCount = () => (countEl.textContent = players.size);
+const net = { move() {}, chat() {} };
+const on = {
+  welcome(you, list) {
+    me = you;
+    for (const p of list) makeCharacter(p);
+    document.getElementById('join').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('chat').classList.remove('hidden');
+    updateCount();
+  },
+  full() { document.getElementById('msg').textContent = 'The campfire is full (10 people). Try again soon.'; },
+  join(p) { if (!players.has(p.id)) makeCharacter(p); updateCount(); },
+  leave(id) { removeCharacter(id); updateCount(); },
+  move(d) { const pl = players.get(d.id); if (pl) pl.target = d; },
+  chat(d) { showBubble(d.id, String(d.text || '').slice(0, 120)); },
+  error(text) { document.getElementById('msg').textContent = text; },
+};
+
+function connectServer(name) {
+  const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+  const es = new EventSource('/events?name=' + encodeURIComponent(name));
+  const data = (e) => JSON.parse(e.data);
+  es.addEventListener('welcome', (e) => { const d = data(e); on.welcome(d.you, d.players); });
+  es.addEventListener('full', () => { es.close(); on.full(); });
+  es.addEventListener('join', (e) => on.join(data(e)));
+  es.addEventListener('leave', (e) => on.leave(data(e).id));
+  es.addEventListener('move', (e) => on.move(data(e)));
+  es.addEventListener('chat', (e) => on.chat(data(e)));
+  net.move = (d) => post('/move', d);
+  net.chat = (text) => post('/chat', { id: me.id, text });
+}
+
+async function connectSupabase(name) {
+  let createClient;
+  try {
+    ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm'));
+  } catch { return on.error('Could not load the chat service. Check your connection and reload.'); }
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const id = Math.random().toString(16).slice(2, 10);
+  const angle = Math.random() * Math.PI * 2;
+  const you = {
+    id, name: name.slice(0, 16), at: Date.now(),
+    color: `hsl(${Math.floor(Math.random() * 360)}, 65%, 55%)`,
+    x: Math.cos(angle) * 4, z: Math.sin(angle) * 4, ry: 0,
+  };
+  const ch = sb.channel('forest-chat', { config: { presence: { key: id }, broadcast: { self: true } } });
+  const known = new Set();
+  let joined = false, moved = false;
+
+  // Presence = who is here. The first 10 to arrive are in; anyone later gets "full".
+  ch.on('presence', { event: 'sync' }, () => {
+    const list = Object.values(ch.presenceState()).map((metas) => metas[0]).filter((p) => p && p.id)
+      .sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1)).slice(0, MAX_PLAYERS);
+    if (!joined) {
+      if (Object.keys(ch.presenceState()).includes(id) && !list.some((p) => p.id === id)) {
+        ch.untrack(); sb.removeChannel(ch); return on.full();
+      }
+      if (!list.some((p) => p.id === id)) return;
+      joined = true;
+      list.forEach((p) => known.add(p.id));
+      return on.welcome(you, list);
+    }
+    const ids = new Set(list.map((p) => p.id));
+    for (const p of list) if (!known.has(p.id)) { known.add(p.id); on.join(p); }
+    for (const k of [...known]) if (!ids.has(k)) { known.delete(k); on.leave(k); }
+  });
+  ch.on('broadcast', { event: 'move' }, ({ payload }) => known.has(payload.id) && payload.id !== id && on.move(payload));
+  ch.on('broadcast', { event: 'chat' }, ({ payload }) => known.has(payload.id) && on.chat(payload));
+  ch.subscribe((status) => {
+    if (status === 'SUBSCRIBED') ch.track(you);
+    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') on.error('Could not reach the chat service. Reload to try again.');
+  });
+  // Refresh my saved position now and then so newcomers see me in the right place.
+  setInterval(() => { if (joined && moved) { moved = false; ch.track(you); } }, 3000);
+  net.move = (d) => {
+    Object.assign(you, { x: d.x, z: d.z, ry: d.ry }); moved = true;
+    ch.send({ type: 'broadcast', event: 'move', payload: { id, x: d.x, z: d.z, ry: d.ry } });
+  };
+  net.chat = (text) => ch.send({ type: 'broadcast', event: 'chat', payload: { id, text: text.slice(0, 120) } });
+}
+
+const connect = SUPABASE_URL && SUPABASE_KEY ? connectSupabase : connectServer;
+
+const names = ['Fox', 'Owl', 'Deer', 'Bear', 'Hare', 'Wren', 'Moss', 'Fern', 'Pine', 'Elk'];
+const nameInput = document.getElementById('nameInput');
+let connecting = false;
+nameInput.value = names[Math.floor(Math.random() * names.length)] + ' ' + Math.floor(10 + Math.random() * 90);
+nameInput.select();
+nameInput.focus();
+document.getElementById('joinForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (me || connecting) return;
+  connecting = true;
+  connect(nameInput.value.trim() || 'Guest');
+});
+
+// ---------- Input ----------
+const keys = new Set();
+const chatInput = document.getElementById('chatInput');
+let zoomId = null;
+
+addEventListener('keydown', (e) => {
+  if (!me) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (document.activeElement === chatInput) {
+      const text = chatInput.value.trim();
+      if (text) net.chat(text);
+      chatInput.value = '';
+      chatInput.blur();
+    } else {
+      chatInput.focus();
+    }
+    return;
+  }
+  if (document.activeElement === chatInput) {
+    if (e.key === 'Escape') chatInput.blur();
+    return;
+  }
+  if (e.key.startsWith('Arrow')) { e.preventDefault(); keys.add(e.key); zoomId = null; }
+  if (e.key === 'Escape') zoomId = null;
+});
+addEventListener('keyup', (e) => keys.delete(e.key));
+addEventListener('blur', () => keys.clear());
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (e) => {
+  if (!me) return;
+  chatInput.blur();
+  mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(mouse, camera);
+  const hit = raycaster.intersectObjects(pickables, false)[0];
+  zoomId = hit ? hit.object.userData.id : null;
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- Loop ----------
+const clock = new THREE.Clock();
+const camGoal = new THREE.Vector3(), lookGoal = new THREE.Vector3(), look = new THREE.Vector3(0, 1, 0);
+const tmp = new THREE.Vector3();
+let lastSent = 0, dirty = false;
+const SPEED = 5, LIMIT = 19;
+
+function collide(x, z) {
+  const solids = [{ x: 0, z: 0, r: FIRE_R }, ...trees];
+  for (const t of solids) {
+    const dx = x - t.x, dz = z - t.z, d = Math.hypot(dx, dz), min = t.r + 0.35;
+    if (d < min && d > 0.0001) { x = t.x + (dx / d) * min; z = t.z + (dz / d) * min; }
+  }
+  const r = Math.hypot(x, z);
+  if (r > LIMIT) { x *= LIMIT / r; z *= LIMIT / r; }
+  return [x, z];
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+
+  // Fire flicker
+  flames.forEach((f, i) => {
+    const s = 1 + Math.sin(t * (9 + i * 3) + i) * 0.12 + Math.sin(t * 23 + i * 2) * 0.06;
+    f.scale.set(1 / Math.sqrt(s), s, 1 / Math.sqrt(s));
+    f.position.y = 0.2 + (f.userData.h * s) / 2;
+    f.rotation.y = t * (1 + i);
+  });
+  fireLight.intensity = 26 + Math.sin(t * 13) * 3 + Math.sin(t * 31) * 2;
+
+  // My movement
+  const mine = me && players.get(me.id);
+  if (mine) {
+    let dx = 0, dz = 0;
+    if (keys.has('ArrowUp')) dz -= 1;
+    if (keys.has('ArrowDown')) dz += 1;
+    if (keys.has('ArrowLeft')) dx -= 1;
+    if (keys.has('ArrowRight')) dx += 1;
+    if (dx || dz) {
+      const len = Math.hypot(dx, dz);
+      const [nx, nz] = collide(mine.target.x + (dx / len) * SPEED * dt, mine.target.z + (dz / len) * SPEED * dt);
+      mine.target = { id: me.id, x: nx, z: nz, ry: Math.atan2(dx, dz) };
+      dirty = true;
+    }
+    if (dirty && t - lastSent > 0.1) {
+      net.move(mine.target);
+      lastSent = t; dirty = false;
+    }
+  }
+
+  // Smoothly move every character toward its target
+  for (const pl of players.values()) {
+    const g = pl.group, tg = pl.target;
+    const isMe = me && pl.data.id === me.id;
+    const k = isMe ? 1 : 1 - Math.exp(-12 * dt);
+    const moving = Math.hypot(tg.x - g.position.x, tg.z - g.position.z) > 0.01 || (isMe && keys.size);
+    g.position.x += (tg.x - g.position.x) * k;
+    g.position.z += (tg.z - g.position.z) * k;
+    let dr = tg.ry - g.rotation.y;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    g.rotation.y += dr * (1 - Math.exp(-14 * dt));
+    pl.bob = moving ? pl.bob + dt * 12 : pl.bob * 0.85;
+    g.position.y = Math.abs(Math.sin(pl.bob)) * 0.08;
+  }
+
+  // Camera: follow me, or glide close to the person I clicked
+  const focus = players.get(zoomId) || mine;
+  if (focus) {
+    const fp = focus.group.position;
+    if (zoomId && players.has(zoomId)) {
+      tmp.set(camera.position.x - fp.x, 0, camera.position.z - fp.z);
+      if (tmp.lengthSq() < 0.01) tmp.set(0, 0, 1);
+      tmp.normalize().multiplyScalar(3.2);
+      camGoal.set(fp.x + tmp.x, 2.1, fp.z + tmp.z);
+      lookGoal.set(fp.x, 1.3, fp.z);
+    } else {
+      camGoal.set(fp.x, fp.y + 8, fp.z + 11);
+      lookGoal.set(fp.x, 1, fp.z);
+    }
+    const c = 1 - Math.exp(-4 * dt);
+    camera.position.lerp(camGoal, c);
+    look.lerp(lookGoal, c);
+    camera.lookAt(look);
+  } else {
+    // Before joining: slow orbit around the fire
+    camera.position.set(Math.sin(t * 0.1) * 14, 8, Math.cos(t * 0.1) * 14);
+    camera.lookAt(0, 1, 0);
+  }
+
+  renderer.render(scene, camera);
+
+  // Name tags and bubbles follow heads on screen
+  for (const pl of players.values()) {
+    tmp.copy(pl.group.position); tmp.y += 1.85;
+    tmp.project(camera);
+    const visible = tmp.z < 1;
+    pl.tag.style.display = visible ? '' : 'none';
+    if (visible) pl.tag.style.left = ((tmp.x + 1) / 2) * innerWidth + 'px', pl.tag.style.top = ((1 - tmp.y) / 2) * innerHeight + 'px';
+  }
+}
+animate();
+
+window.__fc = { players, camera, get me() { return me; }, get zoomId() { return zoomId; } };
+</script>
+</body>
+</html>
