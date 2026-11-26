@@ -3,395 +3,751 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Forest Chat</title>
+<title>PyCampus Classroom</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1a14; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  canvas { display: block; cursor: pointer; }
+  :root { --accent: #ffb020; --ink: #f3f1ea; --panel: rgba(20, 24, 32, .88); --line: rgba(255,255,255,.14); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1d24; color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; }
+  button { font: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
+
   #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-  .tag { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 6px; white-space: nowrap; }
-  .name { pointer-events: auto; cursor: pointer; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 10px; font-size: 13px; font-weight: 600; }
-  .name.me { background: rgba(255,140,40,.85); }
-  .bubble { max-width: 220px; white-space: normal; text-align: center; background: #fff; color: #222; padding: 6px 10px; border-radius: 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.35); position: relative; animation: pop .15s ease-out; }
+  .tag { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 4px; white-space: nowrap; }
+  .name { pointer-events: auto; cursor: pointer; color: #fff; background: rgba(0,0,0,.6); padding: 2px 8px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+  .name.me { background: rgba(214, 120, 20, .9); }
+  .name .prof { color: var(--accent); margin-left: 4px; }
+  .name.me .prof { color: #fff3c4; }
+  .hand { font-size: 22px; animation: wave 1s ease-in-out infinite alternate; }
+  @keyframes wave { to { transform: rotate(14deg); } }
+  .bubble { max-width: 220px; white-space: normal; text-align: center; background: #fff; color: #222; padding: 6px 10px; border-radius: 12px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.35); position: relative; }
   .bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: #fff; }
-  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
-  #hud { position: fixed; top: 12px; left: 12px; color: #e8f3ea; font-size: 13px; background: rgba(0,0,0,.4); padding: 8px 12px; border-radius: 10px; line-height: 1.5; }
-  #chat { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(480px, calc(100% - 32px)); }
-  #chat input { width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 22px; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.55); color: #fff; font-size: 15px; outline: none; }
-  #chat input:focus { border-color: #ffa24a; background: rgba(0,0,0,.75); }
-  #join { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,12,9,.45); }
-  #join form { background: rgba(18,32,24,.92); color: #fff; padding: 22px 24px; border-radius: 16px; width: min(320px, calc(100% - 32px)); box-sizing: border-box; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+
+  #hud { position: fixed; top: 12px; left: 12px; font-size: 13px; background: var(--panel); padding: 8px 12px; border-radius: 10px; line-height: 1.55; max-width: calc(100% - 48px); }
+  #hud b { color: var(--accent); }
+  #actions { position: fixed; right: 12px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+  #actions button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 22px; padding: 9px 14px; }
+  #actions button.on { background: var(--accent); color: #222; }
+  #chat { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(440px, calc(100% - 220px)); }
+  #chat input { width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 22px; border: 2px solid var(--line); background: rgba(0,0,0,.6); color: #fff; font-size: 15px; outline: none; }
+  #chat input:focus { border-color: var(--accent); }
+  #log { position: fixed; left: 12px; bottom: 16px; width: min(300px, 40vw); max-height: 30vh; overflow-y: auto; font-size: 13px; background: var(--panel); border-radius: 10px; padding: 6px 10px; }
+  #log:empty { display: none; }
+  #log div { padding: 2px 0; overflow-wrap: anywhere; }
+  #log b { color: var(--accent); }
+  #log .sys { opacity: .65; font-style: italic; }
+  #notice { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #222; padding: 8px 14px; border-radius: 10px; font-size: 14px; z-index: 5; }
+
+  #join { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,12,16,.55); }
+  #join form { background: var(--panel); padding: 22px 24px; border-radius: 16px; width: min(340px, calc(100% - 32px)); box-sizing: border-box; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   #join h1 { margin: 0 0 4px; font-size: 22px; }
   #join p { margin: 0 0 14px; opacity: .75; font-size: 13px; }
-  #join input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 0; font-size: 16px; margin-bottom: 10px; }
-  #join button { width: 100%; padding: 10px; border: 0; border-radius: 10px; background: #ff8c28; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
-  #msg { margin-top: 10px; color: #ffb4a0; font-size: 13px; min-height: 1em; }
-  .hidden { display: none !important; }
+  #join input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 0; font-size: 16px; margin-bottom: 12px; }
+  .roles { display: flex; gap: 10px; }
+  .roles button { flex: 1; padding: 11px 6px; border: 0; border-radius: 10px; font-size: 15px; font-weight: 700; background: var(--accent); color: #222; }
+  .roles button.alt { background: #4a82ff; color: #fff; }
+  .roles button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  #joinMsg { margin-top: 10px; font-size: 13px; min-height: 1.2em; opacity: .85; }
+
+  #board { position: fixed; inset: 16px; display: flex; flex-direction: column; background: #161a22; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.6); overflow: hidden; }
+  #boardHead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #boardHead h2 { margin: 0; font-size: 16px; flex: 1; }
+  #boardHead .spot { font-size: 13px; color: var(--accent); }
+  #boardClose { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 4px 10px; }
+  #boardBody { flex: 1; display: flex; min-height: 0; }
+  #tabs { width: 170px; border-right: 1px solid var(--line); overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+  #tabs button { text-align: left; background: none; color: var(--ink); border: 0; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  #tabs button.active { background: rgba(255,176,32,.18); color: var(--accent); }
+  #tabs .empty { font-size: 12px; opacity: .6; padding: 6px 10px; }
+  #pane { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 10px; }
+  #paneTitle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  #paneTitle .who { font-weight: 700; flex: 1; }
+  .btn { background: #2b3242; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+  .btn.primary { background: var(--accent); color: #222; border: 0; font-weight: 700; }
+  #problemView { flex: 1; overflow: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.5; background: #0f1218; border-radius: 10px; padding: 14px; }
+  #problemEdit { flex: 1; resize: none; font: 15px/1.5 ui-monospace, Menlo, Consolas, monospace; background: #0f1218; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  #editorWrap { flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  #editorWrap .CodeMirror { height: 100%; font-size: 14px; }
+  #output { max-height: 28%; min-height: 3em; overflow: auto; margin: 0; background: #0b0d12; border-radius: 10px; padding: 10px; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; color: #b9f6ca; }
+  #output.err { color: #ffab91; }
+  @media (max-width: 640px) {
+    #board { inset: 0; border-radius: 0; }
+    #boardBody { flex-direction: column; }
+    #tabs { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    #chat { width: calc(100% - 140px); left: 12px; transform: none; }
+    #log { display: none; }
+  }
 </style>
-<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.min.js" } }</script>
 </head>
 <body>
 <div id="labels"></div>
-<div id="hud" class="hidden"><b id="count">1</b>/10 at the campfire<br>Arrow keys: walk · Enter: chat<br>Click someone: zoom in · Esc: zoom out</div>
-<div id="chat" class="hidden"><input id="chatInput" maxlength="120" placeholder="Press Enter to chat" autocomplete="off"></div>
+<div id="hud" class="hidden"></div>
+<div id="notice" class="hidden"></div>
+<div id="log" class="hidden"></div>
+<div id="chat" class="hidden"><input id="chatInput" maxlength="200" placeholder="Press Enter to chat" autocomplete="off"></div>
+<div id="actions" class="hidden">
+  <button id="handBtn" title="Raise hand (H)">✋ Raise hand</button>
+  <button id="boardBtn" title="Open the whiteboard (B)">📋 Board</button>
+</div>
+
 <div id="join">
-  <form id="joinForm">
-    <h1>🔥 Forest Chat</h1>
-    <p>Pick a nickname and step up to the fire.</p>
+  <form id="joinForm" onsubmit="return false">
+    <h1>🐍 PyCampus Classroom</h1>
+    <p>Pick a nickname and a role.</p>
     <input id="nameInput" maxlength="16" autocomplete="off" aria-label="Nickname">
-    <button type="submit">Join</button>
-    <div id="msg"></div>
+    <div class="roles">
+      <button type="button" id="asStudent">Student</button>
+      <button type="button" id="asProf" class="alt">Professor</button>
+    </div>
+    <div id="joinMsg">Connecting…</div>
   </form>
 </div>
 
+<div id="board" class="hidden" role="dialog" aria-label="Whiteboard">
+  <div id="boardHead"><h2>📋 Whiteboard</h2><span class="spot" id="spotLabel"></span><button id="boardClose">Close (Esc)</button></div>
+  <div id="boardBody">
+    <div id="tabs"></div>
+    <div id="pane">
+      <div id="paneTitle"></div>
+      <div id="problemView" class="hidden"></div>
+      <textarea id="problemEdit" class="hidden" maxlength="2000" placeholder="Write a problem for the class, then post it to the whiteboard."></textarea>
+      <div id="editorWrap" class="hidden"></div>
+      <pre id="output" class="hidden"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.min.js" } }</script>
 <script type="module">
 import * as THREE from 'three';
 
-// ---------- Scene: a small forest with a campfire ----------
+// ================= Config =================
+// Supabase Realtime syncs the classroom when hosted (e.g. Vercel). The anon / publishable key is public by design.
+const SUPABASE_URL = 'https://drsrjhuoehjznlbzbowm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_K7bKtSkEoOR72vaM5Osweg_o73aCWNc';
+const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm';
+const PYODIDE_URL = window.PYODIDE_URL || 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+const CHANNEL = 'py-classroom';
+const MAX_PLAYERS = 10;
+const MAX_CODE = 10000;
+const MY_ID = Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+const $ = (id) => document.getElementById(id);
+
+// ================= Scene: the classroom =================
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
 document.body.prepend(renderer.domElement);
-
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1b2a3a);
-scene.fog = new THREE.Fog(0x1b2a3a, 18, 45);
+scene.background = new THREE.Color(0x2a2f3a);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 7, 12);
+camera.lookAt(0, 1.5, -4);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x404050, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+sun.position.set(6, 12, 6);
+scene.add(sun);
 
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 200);
-camera.position.set(0, 9, 14);
-camera.lookAt(0, 0, 0);
-
-scene.add(new THREE.HemisphereLight(0x8fb4d9, 0x2a3b22, 0.9));
-const moon = new THREE.DirectionalLight(0xb8c8ff, 0.6);
-moon.position.set(-10, 20, 8);
-scene.add(moon);
-
-const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshLambertMaterial({ color: 0x2f5a2c }));
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-const clearing = new THREE.Mesh(new THREE.CircleGeometry(6, 40), new THREE.MeshLambertMaterial({ color: 0x5a4a32 }));
-clearing.rotation.x = -Math.PI / 2;
-clearing.position.y = 0.01;
-clearing.receiveShadow = true;
-scene.add(clearing);
-
-// Same seeded forest for everyone.
-let seed = 7;
-const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const trees = []; // { x, z, r } for collision
-const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5b3a1e });
-const leafMats = [0x1f4d2b, 0x2a5e32, 0x234a2a].map((c) => new THREE.MeshLambertMaterial({ color: c }));
-for (let i = 0; i < 70; i++) {
-  const a = rand() * Math.PI * 2, d = 8 + rand() * 22;
-  const x = Math.cos(a) * d, z = Math.sin(a) * d, s = 0.8 + rand() * 0.7;
-  const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.25 * s, 1.4 * s, 7), trunkMat);
-  trunk.position.y = 0.7 * s;
-  tree.add(trunk);
-  for (let k = 0; k < 3; k++) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry((1.5 - k * 0.35) * s, 1.8 * s, 8), leafMats[(i + k) % 3]);
-    cone.position.y = (1.7 + k * 0.9) * s;
-    cone.castShadow = true;
-    tree.add(cone);
-  }
-  tree.position.set(x, 0, z);
-  tree.rotation.y = rand() * 6;
-  scene.add(tree);
-  trees.push({ x, z, r: 0.45 * s + 0.35 });
+const ROOM = { w: 20, d: 18, h: 4.2 }; // x: -10..10, z: -9..9
+const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), mat(0x9b7a52));
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+const wallMat = mat(0xe8e2d4);
+function wall(w, x, z, ry) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, ROOM.h), wallMat);
+  m.position.set(x, ROOM.h / 2, z); m.rotation.y = ry; scene.add(m);
+}
+wall(ROOM.w, 0, -ROOM.d / 2, 0);
+wall(ROOM.d, -ROOM.w / 2, 0, Math.PI / 2);
+wall(ROOM.d, ROOM.w / 2, 0, -Math.PI / 2);
+for (const z of [-4, 1, 6]) { // windows
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), new THREE.MeshBasicMaterial({ color: 0x9fd3ff }));
+  win.position.set(ROOM.w / 2 - 0.01, 2.3, z); win.rotation.y = -Math.PI / 2; scene.add(win);
 }
 
-// Campfire: stones, logs, flickering flames and light.
-const fire = new THREE.Group();
-const stoneMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
-for (let i = 0; i < 10; i++) {
-  const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), stoneMat);
-  const a = (i / 10) * Math.PI * 2;
-  st.position.set(Math.cos(a) * 0.85, 0.12, Math.sin(a) * 0.85);
-  fire.add(st);
-}
-for (let i = 0; i < 3; i++) {
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2, 6), trunkMat);
-  log.rotation.z = Math.PI / 2;
-  log.rotation.y = (i / 3) * Math.PI;
-  log.position.y = 0.15;
-  fire.add(log);
-}
-const flames = [[0xff5a1a, 0.45, 1.1], [0xff9a2a, 0.32, 0.85], [0xffe07a, 0.18, 0.55]].map(([c, r, h]) => {
-  const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9 }));
-  f.position.y = 0.2 + h / 2;
-  f.userData.h = h;
-  fire.add(f);
-  return f;
-});
-const fireLight = new THREE.PointLight(0xff8a3a, 30, 16, 1.6);
-fireLight.position.y = 1.2;
-fireLight.castShadow = true;
-fire.add(fireLight);
-scene.add(fire);
-const FIRE_R = 1.3;
+// Whiteboard with a live canvas texture
+const boardCanvas = document.createElement('canvas');
+boardCanvas.width = 1280; boardCanvas.height = 560;
+const bctx = boardCanvas.getContext('2d');
+const boardTex = new THREE.CanvasTexture(boardCanvas);
+boardTex.colorSpace = THREE.SRGBColorSpace;
+const boardFrame = new THREE.Mesh(new THREE.BoxGeometry(9.4, 4.1, 0.1), mat(0x7a7f8a));
+boardFrame.position.set(0, 2.25, -ROOM.d / 2 + 0.06);
+scene.add(boardFrame);
+const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.94), new THREE.MeshBasicMaterial({ map: boardTex }));
+boardMesh.position.set(0, 2.25, -ROOM.d / 2 + 0.12);
+scene.add(boardMesh);
 
-// ---------- Characters ----------
-const players = new Map(); // id -> { group, tag, bubbleEl, bubbleTimer, target, data }
-const labels = document.getElementById('labels');
+const solids = []; // { x, z, hw, hd } boxes for collision
+function box(w, h, d, color, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+  m.position.set(x, y, z); scene.add(m); return m;
+}
+box(3, 0.9, 1.1, 0x5d4128, 0, 0.45, -6.2); // professor desk
+solids.push({ x: 0, z: -6.2, hw: 1.5, hd: 0.55 });
+
+// Student desks + chairs (the seats)
+const seats = [];
+const chairMeshes = [];
+[-6.4, -3.2, 0, 3.2, 6.4].forEach((x) => [-1.5, 2.5].forEach((z) => {
+  box(1.6, 0.08, 0.9, 0xc8a26b, x, 0.78, z);
+  for (const [lx, lz] of [[-0.7, -0.35], [0.7, -0.35], [-0.7, 0.35], [0.7, 0.35]]) box(0.08, 0.76, 0.08, 0x444444, x + lx, 0.38, z + lz);
+  solids.push({ x, z, hw: 0.8, hd: 0.45 });
+  const cz = z + 0.95, index = seats.length;
+  const chair = new THREE.Group();
+  const seatTop = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.55), mat(0x3d6fb6));
+  seatTop.position.y = 0.48;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.08), mat(0x3d6fb6));
+  back.position.set(0, 0.8, 0.26);
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.46), mat(0x444444));
+  leg.position.y = 0.23;
+  chair.add(seatTop, back, leg);
+  chair.position.set(x, 0, cz);
+  for (const c of chair.children) { c.userData.seat = index; chairMeshes.push(c); }
+  scene.add(chair);
+  seats.push({ index, x, z: cz });
+}));
+
+// ================= Avatars =================
+const players = new Map(); // id -> view
+const labels = $('labels');
 const pickables = [];
-let me = null;
 
-function makeCharacter(p) {
+function makeAvatar(meta) {
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(p.color) });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.6, 4, 10), bodyMat);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.6, 4, 10), mat(new THREE.Color(meta.color)));
   body.position.y = 0.65;
-  body.castShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), new THREE.MeshLambertMaterial({ color: 0xf1c9a0 }));
-  head.position.y = 1.45;
-  head.castShadow = true;
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  for (const sx of [-0.1, 0.1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), eyeMat);
-    eye.position.set(sx, 1.5, 0.25);
-    group.add(eye);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 12), mat(0xf1c9a0));
+  head.position.y = 1.42;
+  for (const sx of [-0.09, 0.09]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    eye.position.set(sx, 1.47, 0.24); group.add(eye);
   }
-  group.add(body, head);
-  body.userData.id = head.userData.id = p.id;
+  const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.45, 3, 6), mat(new THREE.Color(meta.color)));
+  arm.position.set(0.34, 1.55, 0); arm.rotation.z = 0.15; arm.visible = false;
+  group.add(body, head, arm);
+  if (meta.role === 'professor') { // mortarboard hat
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.05, 0.62), mat(0x111111));
+    cap.position.y = 1.7; cap.rotation.y = Math.PI / 4;
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.14, 12), mat(0x111111));
+    crown.position.y = 1.62;
+    group.add(cap, crown);
+  }
+  body.userData.id = head.userData.id = meta.id;
   pickables.push(body, head);
-  group.position.set(p.x, 0, p.z);
-  group.rotation.y = p.ry;
   scene.add(group);
 
-  const tag = document.createElement('div');
-  tag.className = 'tag';
-  const name = document.createElement('div');
-  name.className = 'name' + (me && p.id === me.id ? ' me' : '');
-  name.textContent = p.name;
-  name.addEventListener('click', () => { zoomId = p.id; chatInput.blur(); });
-  tag.appendChild(name);
+  const tag = document.createElement('div'); tag.className = 'tag';
+  const handEl = document.createElement('div'); handEl.className = 'hand'; handEl.textContent = '✋';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'name' + (meta.id === MY_ID ? ' me' : '');
+  nameEl.addEventListener('click', () => { zoomId = meta.id; });
+  tag.append(handEl, nameEl);
   labels.appendChild(tag);
-  players.set(p.id, { group, tag, nameEl: name, bubbleEl: null, bubbleTimer: 0, target: { x: p.x, z: p.z, ry: p.ry }, data: p, bob: 0 });
+  const seat = meta.seat != null ? seats[meta.seat] : null;
+  const start = seat ? { x: seat.x, z: seat.z, ry: Math.PI } : { x: meta.x, z: meta.z, ry: meta.ry };
+  const view = { group, tag, nameEl, handEl, arm, bubbleEl: null, bubbleTimer: 0, target: start, meta, bob: 0, role: meta.role };
+  players.set(meta.id, view);
+  group.position.set(start.x, 0, start.z);
+  group.rotation.y = start.ry;
+  updateAvatar(view, meta);
+  return view;
 }
 
-function removeCharacter(id) {
-  const pl = players.get(id);
-  if (!pl) return;
-  scene.remove(pl.group);
+function updateAvatar(view, meta) {
+  view.meta = meta;
+  view.nameEl.textContent = meta.name;
+  if (meta.role === 'professor') { const b = document.createElement('span'); b.className = 'prof'; b.textContent = 'Prof.'; view.nameEl.appendChild(b); }
+  view.handEl.style.display = meta.hand ? '' : 'none';
+  view.arm.visible = !!meta.hand;
+}
+
+function removeAvatar(id) {
+  const v = players.get(id);
+  if (!v) return;
+  scene.remove(v.group);
   for (let i = pickables.length - 1; i >= 0; i--) if (pickables[i].userData.id === id) pickables.splice(i, 1);
-  pl.tag.remove();
-  clearTimeout(pl.bubbleTimer);
+  v.tag.remove(); clearTimeout(v.bubbleTimer);
   players.delete(id);
   if (zoomId === id) zoomId = null;
 }
 
 function showBubble(id, text) {
-  const pl = players.get(id);
-  if (!pl) return;
-  if (!pl.bubbleEl) {
-    pl.bubbleEl = document.createElement('div');
-    pl.bubbleEl.className = 'bubble';
-    pl.tag.insertBefore(pl.bubbleEl, pl.nameEl);
-  }
-  pl.bubbleEl.textContent = text;
-  pl.bubbleEl.style.animation = 'none'; void pl.bubbleEl.offsetWidth; pl.bubbleEl.style.animation = '';
-  clearTimeout(pl.bubbleTimer);
-  pl.bubbleTimer = setTimeout(() => { pl.bubbleEl?.remove(); pl.bubbleEl = null; }, 5000);
+  const v = players.get(id);
+  if (!v) return;
+  if (!v.bubbleEl) { v.bubbleEl = document.createElement('div'); v.bubbleEl.className = 'bubble'; v.tag.insertBefore(v.bubbleEl, v.handEl); }
+  v.bubbleEl.textContent = text;
+  clearTimeout(v.bubbleTimer);
+  v.bubbleTimer = setTimeout(() => { v.bubbleEl?.remove(); v.bubbleEl = null; }, 5000);
 }
 
-// ---------- Networking ----------
-// Two ways to sync players:
-//  1) Supabase Realtime, when the two values below are filled in (for static hosting such as Vercel).
-//  2) Otherwise the bundled server.js (run `node server.js`), using Server-Sent Events.
-// The Supabase "anon" / "publishable" key is designed to be public; never put a secret/service key here.
-const SUPABASE_URL = 'https://drsrjhuoehjznlbzbowm.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_K7bKtSkEoOR72vaM5Osweg_o73aCWNc';
-const MAX_PLAYERS = 10;
-
-const countEl = document.getElementById('count');
-const updateCount = () => (countEl.textContent = players.size);
-const net = { move() {}, chat() {} };
-const on = {
-  welcome(you, list) {
-    me = you;
-    for (const p of list) makeCharacter(p);
-    document.getElementById('join').classList.add('hidden');
-    document.getElementById('hud').classList.remove('hidden');
-    document.getElementById('chat').classList.remove('hidden');
-    updateCount();
-  },
-  full() { document.getElementById('msg').textContent = 'The campfire is full (10 people). Try again soon.'; },
-  join(p) { if (!players.has(p.id)) makeCharacter(p); updateCount(); },
-  leave(id) { removeCharacter(id); updateCount(); },
-  move(d) { const pl = players.get(d.id); if (pl) pl.target = d; },
-  chat(d) { showBubble(d.id, String(d.text || '').slice(0, 120)); },
-  error(text) { document.getElementById('msg').textContent = text; },
-};
-
-function connectServer(name) {
-  const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
-  const es = new EventSource('/events?name=' + encodeURIComponent(name));
-  const data = (e) => JSON.parse(e.data);
-  es.addEventListener('welcome', (e) => { const d = data(e); on.welcome(d.you, d.players); });
-  es.addEventListener('full', () => { es.close(); on.full(); });
-  es.addEventListener('join', (e) => on.join(data(e)));
-  es.addEventListener('leave', (e) => on.leave(data(e).id));
-  es.addEventListener('move', (e) => on.move(data(e)));
-  es.addEventListener('chat', (e) => on.chat(data(e)));
-  net.move = (d) => post('/move', d);
-  net.chat = (text) => post('/chat', { id: me.id, text });
-}
-
-async function connectSupabase(name) {
-  let createClient;
-  try {
-    ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm'));
-  } catch { return on.error('Could not load the chat service. Check your connection and reload.'); }
-  // worker: keeps the connection's heartbeat running even when the tab is in the background.
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { worker: true } });
-  const id = Math.random().toString(16).slice(2, 10);
-  const angle = Math.random() * Math.PI * 2;
-  const you = {
-    id, name: name.slice(0, 16), at: Date.now(),
-    color: `hsl(${Math.floor(Math.random() * 360)}, 65%, 55%)`,
-    x: Math.cos(angle) * 4, z: Math.sin(angle) * 4, ry: 0,
-  };
-  const ch = sb.channel('forest-chat', { config: { presence: { key: id }, broadcast: { self: true } } });
-  const known = new Set();
-  let joined = false, moved = false;
-
-  // Presence = who is here. The first 10 to arrive are in; anyone later gets "full".
-  const reconcile = () => {
-    const list = Object.values(ch.presenceState()).map((metas) => metas[0]).filter((p) => p && p.id)
-      .sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1)).slice(0, MAX_PLAYERS);
-    if (!joined) {
-      if (Object.keys(ch.presenceState()).includes(id) && !list.some((p) => p.id === id)) {
-        ch.untrack(); sb.removeChannel(ch); return on.full();
-      }
-      if (!list.some((p) => p.id === id)) return;
-      joined = true;
-      list.forEach((p) => known.add(p.id));
-      return on.welcome(you, list);
-    }
-    const ids = new Set(list.map((p) => p.id));
-    for (const p of list) if (!known.has(p.id)) { known.add(p.id); on.join(p); }
-    for (const k of [...known]) if (!ids.has(k)) { known.delete(k); on.leave(k); }
-  };
-  ch.on('presence', { event: 'sync' }, reconcile);
-  // A message from someone I don't have yet means my list is stale: re-check who is here.
-  const fromKnown = (pid) => known.has(pid) || (reconcile(), known.has(pid));
-  ch.on('broadcast', { event: 'move' }, ({ payload }) => payload.id !== id && fromKnown(payload.id) && on.move(payload));
-  ch.on('broadcast', { event: 'chat' }, ({ payload }) => fromKnown(payload.id) && on.chat(payload));
-  ch.subscribe((status) => {
-    if (status === 'SUBSCRIBED') ch.track(you);
-    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') on.error('Could not reach the chat service. Reload to try again.');
-  });
-  // Refresh my saved position now and then so newcomers see me in the right place.
-  // Also re-announce every 15s when idle, so anyone whose list dropped me picks me back up.
-  let lastTrack = Date.now();
-  setInterval(() => {
-    if (joined && (moved || Date.now() - lastTrack > 15000)) { moved = false; lastTrack = Date.now(); ch.track(you); }
-    if (joined) reconcile();
-  }, 3000);
-  window.__fc.channel = ch;
-  net.move = (d) => {
-    Object.assign(you, { x: d.x, z: d.z, ry: d.ry }); moved = true;
-    ch.send({ type: 'broadcast', event: 'move', payload: { id, x: d.x, z: d.z, ry: d.ry } });
-  };
-  net.chat = (text) => ch.send({ type: 'broadcast', event: 'chat', payload: { id, text: text.slice(0, 120) } });
-}
-
-const connect = SUPABASE_URL && SUPABASE_KEY ? connectSupabase : connectServer;
-
-const names = ['Fox', 'Owl', 'Deer', 'Bear', 'Hare', 'Wren', 'Moss', 'Fern', 'Pine', 'Elk'];
-const nameInput = document.getElementById('nameInput');
-let connecting = false;
-nameInput.value = names[Math.floor(Math.random() * names.length)] + ' ' + Math.floor(10 + Math.random() * 90);
-nameInput.select();
-nameInput.focus();
-document.getElementById('joinForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  if (me || connecting) return;
-  connecting = true;
-  connect(nameInput.value.trim() || 'Guest');
-});
-
-// ---------- Input ----------
-const keys = new Set();
-const chatInput = document.getElementById('chatInput');
+// ================= Classroom state =================
+let ch = null;            // realtime channel (Supabase or the local relay)
+let me = null;            // my presence meta once I click a role
+let joined = false;
+let roster = [];          // presence metas, earliest first, max 10
+let professorId = null;   // earliest professor in the roster
+const panes = new Map();  // studentId -> { text, output, error }
+const board = { problem: '', spotlight: null };
 let zoomId = null;
 
-addEventListener('keydown', (e) => {
-  if (!me) return;
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    if (document.activeElement === chatInput) {
-      const text = chatInput.value.trim();
-      if (text) net.chat(text);
-      chatInput.value = '';
-      chatInput.blur();
+const nameOf = (id) => roster.find((p) => p.id === id)?.name || 'Someone';
+const isProfessor = () => joined && professorId === MY_ID;
+const students = () => roster.filter((p) => p.id !== professorId);
+
+function readPresence() {
+  const all = Object.values(ch.presenceState()).map((m) => m[0]).filter((p) => p && p.id && p.name);
+  all.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+  return all;
+}
+
+function onPresence() {
+  const all = readPresence();
+  const list = all.slice(0, MAX_PLAYERS);
+  const prevProf = professorId;
+  roster = list;
+  professorId = list.find((p) => p.role === 'professor')?.id || null;
+
+  if (!joined) {
+    updateJoinScreen(all);
+    if (!me || !all.some((p) => p.id === MY_ID)) return;
+    if (!list.some((p) => p.id === MY_ID)) { ch.untrack(); me = null; $('joinMsg').textContent = 'The classroom is full (10 people). Try again soon.'; return; }
+    joined = true;
+    enterRoom();
+  }
+
+  if (me.role === 'professor' && professorId !== MY_ID && list.some((p) => p.id === MY_ID)) {
+    me = { ...me, role: 'student' }; track(); // someone else got there first
+    panes.set(MY_ID, panes.get(MY_ID) || { text: STARTER, output: '', error: false });
+    note('Someone else is already the professor, so you joined as a student.');
+  }
+  if (me.seat != null) { // two people in one seat: the earlier one keeps it
+    const holder = list.find((p) => p.seat === me.seat);
+    if (holder && holder.id !== MY_ID) { standUp(); note('That seat was just taken.'); }
+  }
+
+  const ids = new Set(list.map((p) => p.id));
+  for (const id of [...players.keys()]) if (!ids.has(id)) {
+    if (id !== MY_ID) logSys(`${players.get(id).meta.name} left`);
+    removeAvatar(id); panes.delete(id);
+  }
+  for (const p of list) {
+    let v = players.get(p.id);
+    const meta = p.id === MY_ID ? me : p;
+    if (v && v.role !== meta.role) { removeAvatar(p.id); v = null; } // rebuild to add/remove the hat
+    if (!v) {
+      makeAvatar(meta);
+      if (p.id !== MY_ID) logSys(`${p.name} is here${p.role === 'professor' ? ' (professor)' : ''}`);
     } else {
-      chatInput.focus();
+      const wasSeated = v.meta.seat != null;
+      updateAvatar(v, meta);
+      if (p.id !== MY_ID && p.seat != null) { const s = seats[p.seat]; v.target = { x: s.x, z: s.z, ry: Math.PI }; }
+      else if (p.id !== MY_ID && wasSeated) v.target = { x: p.x, z: p.z, ry: p.ry };
+    }
+  }
+  if (prevProf && prevProf !== professorId && board.spotlight) board.spotlight = null;
+  if (prevProf && !professorId) logSys('The professor left. The spotlight is cleared, and anyone can now join as professor.');
+  if (board.spotlight && !ids.has(board.spotlight)) board.spotlight = null;
+  refreshUI();
+}
+
+function updateJoinScreen(all) {
+  const profTaken = all.slice(0, MAX_PLAYERS).some((p) => p.role === 'professor');
+  const full = all.length >= MAX_PLAYERS;
+  $('asProf').disabled = profTaken || full;
+  $('asProf').textContent = profTaken ? 'Professor (taken)' : 'Professor';
+  $('asStudent').disabled = full;
+  if (!me) $('joinMsg').textContent = full ? 'The classroom is full (10 people). Try again soon.' : `${all.length}/${MAX_PLAYERS} in class${profTaken ? '' : ' · no professor yet'}`;
+}
+
+function track() { if (me && ch) ch.track({ ...me }); }
+const send = (event, payload) => ch && ch.send({ type: 'broadcast', event, payload: { ...payload, id: MY_ID } });
+const STARTER = '# Write your Python here\nprint("Hello, class!")\n';
+
+function join(role) {
+  if (me || !ch) return;
+  const angle = Math.random() * Math.PI;
+  me = {
+    id: MY_ID, name: ($('nameInput').value.trim() || 'Guest').slice(0, 16), role, at: Date.now(),
+    color: `hsl(${Math.floor(Math.random() * 360)}, 60%, 55%)`,
+    x: Math.cos(angle) * 3, z: 6.3 + Math.sin(angle), ry: Math.PI, seat: null, hand: false,
+  };
+  $('joinMsg').textContent = 'Joining…';
+  track();
+}
+
+function enterRoom() {
+  $('join').classList.add('hidden');
+  for (const id of ['hud', 'chat', 'actions', 'log']) $(id).classList.remove('hidden');
+  if (me.role === 'student') panes.set(MY_ID, { text: STARTER, output: '', error: false });
+  send('hello', {});
+  if (me.role === 'student') send('code', { text: STARTER, output: '', error: false });
+  logSys(`You joined as ${me.role}.`);
+}
+
+// ---- incoming broadcasts ----
+const handlers = {
+  hello() { // a newcomer asks for the current state
+    if (isProfessor()) sendBoard();
+    const mine = panes.get(MY_ID);
+    if (mine && me?.role === 'student') send('code', { text: mine.text, output: mine.output, error: mine.error });
+  },
+  move(p) { const v = players.get(p.id); if (v && v.meta.seat == null) v.target = { x: +p.x || 0, z: +p.z || 0, ry: +p.ry || 0 }; },
+  chat(p) {
+    const text = String(p.text || '').slice(0, 200);
+    if (!text || !players.has(p.id)) return;
+    showBubble(p.id, text); logChat(p.id, text);
+  },
+  code(p) {
+    if (!roster.some((r) => r.id === p.id) || p.id === professorId) return; // only students have panes
+    panes.set(p.id, { text: String(p.text || '').slice(0, MAX_CODE), output: String(p.output || '').slice(0, 4000), error: !!p.error });
+    if (board.spotlight === p.id) drawBoard();
+    if (boardOpen()) { if (activeTab === p.id) renderPane(true); renderTabs(); }
+  },
+  board(p) {
+    if (p.id !== professorId) return; // only the professor controls the whiteboard
+    board.problem = String(p.problem || '').slice(0, 2000);
+    board.spotlight = roster.some((r) => r.id === p.spotlight && r.id !== professorId) ? p.spotlight : null;
+    refreshUI();
+  },
+};
+function sendBoard() { send('board', { problem: board.problem, spotlight: board.spotlight }); }
+
+// ================= Realtime connection =================
+class LocalChannel { // the same calls as a Supabase channel, backed by server.js
+  constructor() { this.h = { sync: [], bc: {} }; this.state = {}; }
+  on(type, filter, cb) { if (type === 'presence') this.h.sync.push(cb); else (this.h.bc[filter.event] ||= []).push(cb); return this; }
+  subscribe(cb) {
+    const es = new EventSource('/events?id=' + MY_ID);
+    es.addEventListener('presence', (e) => { this.state = JSON.parse(e.data); this.h.sync.forEach((f) => f()); });
+    es.addEventListener('bc', (e) => { const m = JSON.parse(e.data); (this.h.bc[m.event] || []).forEach((f) => f({ payload: m.payload })); });
+    es.onopen = () => cb('SUBSCRIBED');
+    es.onerror = () => { if (es.readyState === EventSource.CLOSED) cb('CHANNEL_ERROR'); };
+    return this;
+  }
+  post(path, body) { return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: MY_ID, ...body }) }).catch(() => {}); }
+  presenceState() { return this.state; }
+  track(meta) { return this.post('/track', { meta }); }
+  untrack() { return this.post('/untrack', {}); }
+  send(m) { return this.post('/send', { event: m.event, payload: m.payload }); }
+}
+
+let posDirty = false;
+async function connect() {
+  if (window.LOCAL_RELAY) ch = new LocalChannel();
+  else {
+    try {
+      const { createClient } = await import(SUPABASE_JS);
+      const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { worker: true } });
+      ch = sb.channel(CHANNEL, { config: { presence: { key: MY_ID }, broadcast: { self: false } } });
+    } catch { $('joinMsg').textContent = 'Could not load the classroom service. Reload to try again.'; return; }
+  }
+  ch.on('presence', { event: 'sync' }, onPresence);
+  for (const ev of Object.keys(handlers)) ch.on('broadcast', { event: ev }, ({ payload }) => payload && payload.id !== MY_ID && handlers[ev](payload));
+  ch.subscribe((status) => {
+    if (status === 'SUBSCRIBED') { if (me) track(); else onPresence(); }
+    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (!joined) $('joinMsg').textContent = 'Could not reach the classroom. Reload to try again.'; }
+  });
+  let last = 0; // keep presence fresh: position every 3s while moving, heartbeat every 15s
+  setInterval(() => {
+    if (!joined) return;
+    const v = players.get(MY_ID);
+    if (v && me.seat == null) { me.x = v.target.x; me.z = v.target.z; me.ry = v.target.ry; }
+    if (posDirty || Date.now() - last > 15000) { posDirty = false; last = Date.now(); track(); }
+    onPresence();
+  }, 3000);
+}
+
+// ================= UI: join, HUD, chat =================
+const famous = ['Ada', 'Guido', 'Grace', 'Linus', 'Alan', 'Barbara', 'Ken', 'Margaret', 'Dennis', 'Katherine'];
+$('nameInput').value = famous[Math.floor(Math.random() * famous.length)] + ' ' + Math.floor(10 + Math.random() * 90);
+$('nameInput').select();
+$('asStudent').onclick = () => join('student');
+$('asProf').onclick = () => join('professor');
+$('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (!$('asStudent').disabled) join('student'); } });
+
+let noticeTimer = 0;
+function note(text) { const n = $('notice'); n.textContent = text; n.classList.remove('hidden'); clearTimeout(noticeTimer); noticeTimer = setTimeout(() => n.classList.add('hidden'), 4500); }
+function logLine(build) {
+  const log = $('log'), d = document.createElement('div'); build(d); log.appendChild(d);
+  while (log.children.length > 40) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+function logChat(id, text) { logLine((d) => { const b = document.createElement('b'); b.textContent = nameOf(id) + (id === professorId ? ' (Prof.)' : '') + ': '; d.append(b, document.createTextNode(text)); }); }
+function logSys(text) { logLine((d) => { d.className = 'sys'; d.textContent = text; }); }
+const boardOpen = () => !$('board').classList.contains('hidden');
+
+function refreshUI() {
+  if (!joined) return;
+  const hud = $('hud'); hud.innerHTML = '';
+  const line1 = document.createElement('div');
+  line1.innerHTML = `<b>${roster.length}</b>/10 in class · You are <b>${isProfessor() ? 'the professor' : 'a student'}</b> · Professor: `;
+  line1.appendChild(document.createTextNode(professorId ? nameOf(professorId) : 'none yet'));
+  const line2 = document.createElement('div');
+  line2.textContent = isProfessor()
+    ? 'Arrows: walk · Click a chair: sit · Enter: chat · B: board (post a problem, spotlight a student)'
+    : 'Arrows: walk · Click a chair: sit · Enter: chat · H: raise hand · B: board (your code)';
+  hud.append(line1, line2);
+  $('handBtn').classList.toggle('on', !!me.hand);
+  $('handBtn').textContent = me.hand ? '✋ Lower hand' : '✋ Raise hand';
+  drawBoard();
+  if (boardOpen()) { renderTabs(); renderPane(true); }
+}
+
+function setHand(v) { me.hand = v; track(); updateAvatar(players.get(MY_ID), me); refreshUI(); }
+$('handBtn').onclick = () => setHand(!me.hand);
+$('boardBtn').onclick = () => openBoard();
+
+// ================= Sitting =================
+function sitDown(index) {
+  if (roster.some((p) => p.seat === index && p.id !== MY_ID)) return note('That seat is taken.');
+  const s = seats[index];
+  me.seat = index; me.x = s.x; me.z = s.z; me.ry = Math.PI;
+  const v = players.get(MY_ID); v.target = { x: s.x, z: s.z, ry: Math.PI };
+  track();
+}
+function standUp() {
+  if (me.seat == null) return;
+  const s = seats[me.seat];
+  me.seat = null; me.x = s.x + 1; me.z = s.z + 0.2; me.ry = 0;
+  const v = players.get(MY_ID); if (v) v.target = { x: me.x, z: me.z, ry: 0 };
+  track(); send('move', { x: me.x, z: me.z, ry: 0 });
+}
+
+// ================= Whiteboard (3D texture) =================
+let boardQueued = false;
+function drawBoard() { if (!boardQueued) { boardQueued = true; requestAnimationFrame(paintBoard); } }
+function wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const para of text.split('\n')) {
+    let line = '';
+    for (const word of para.split(' ')) {
+      const t = line ? line + ' ' + word : word;
+      if (ctx.measureText(t).width > maxW && line) { out.push(line); line = word; } else line = t;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function paintBoard() {
+  boardQueued = false;
+  const c = bctx, W = boardCanvas.width, H = boardCanvas.height;
+  c.fillStyle = '#fbfbf8'; c.fillRect(0, 0, W, H);
+  const spot = board.spotlight && panes.get(board.spotlight);
+  c.fillStyle = spot ? '#d9480f' : '#1c4f9c';
+  c.font = 'bold 52px system-ui, sans-serif';
+  c.fillText(spot ? `Spotlight: ${nameOf(board.spotlight)}` : 'Problem', 40, 70);
+  c.fillStyle = '#999'; c.font = '22px system-ui, sans-serif';
+  c.fillText('Click the board to open it', W - 290, 60);
+  if (spot) {
+    c.font = '36px ui-monospace, Menlo, Consolas, monospace'; c.fillStyle = '#222';
+    const lines = spot.text.split('\n'); const maxLines = spot.output ? 8 : 10;
+    lines.slice(0, maxLines).forEach((l, i) => c.fillText(l.slice(0, 56), 40, 130 + i * 40));
+    if (lines.length > maxLines) c.fillText(`… ${lines.length - maxLines} more lines (click to see all)`, 40, 130 + maxLines * 40);
+    if (spot.output) {
+      c.fillStyle = spot.error ? '#b00020' : '#1b7f3a'; c.font = '32px ui-monospace, Menlo, Consolas, monospace';
+      spot.output.split('\n').slice(-2).forEach((l, i) => c.fillText('> ' + l.slice(0, 60), 40, H - 70 + i * 38));
+    }
+  } else {
+    c.fillStyle = '#222'; c.font = '40px system-ui, sans-serif';
+    const text = board.problem || (professorId ? 'Waiting for the professor to post a problem…' : 'No professor yet. You can still write code: press B.');
+    wrapLines(c, text, W - 80).slice(0, 9).forEach((l, i) => c.fillText(l, 40, 140 + i * 48));
+  }
+  boardTex.needsUpdate = true;
+}
+
+// ================= Whiteboard overlay (tabs, editor, run) =================
+let activeTab = 'problem';
+const cm = CodeMirror($('editorWrap'), { mode: 'python', theme: 'material-darker', lineNumbers: true, indentUnit: 4, tabSize: 4, indentWithTabs: false, extraKeys: { Tab: (c) => c.replaceSelection('    ') } });
+let codeSendTimer = 0;
+cm.on('change', (inst, change) => {
+  if (change.origin === 'setValue' || activeTab !== MY_ID) return;
+  const mine = panes.get(MY_ID); if (!mine) return;
+  mine.text = cm.getValue().slice(0, MAX_CODE);
+  clearTimeout(codeSendTimer);
+  codeSendTimer = setTimeout(() => { send('code', { text: mine.text, output: mine.output, error: mine.error }); if (board.spotlight === MY_ID) drawBoard(); }, 120);
+});
+
+function openBoard(tab) {
+  if (!joined) return;
+  activeTab = tab || (me.role === 'student' && panes.has(MY_ID) ? MY_ID : 'problem');
+  $('board').classList.remove('hidden');
+  $('chatInput').blur(); keys.clear();
+  renderTabs(); renderPane(false);
+}
+function closeBoard() { $('board').classList.add('hidden'); cm.getInputField().blur(); $('problemEdit').blur(); }
+$('boardClose').onclick = closeBoard;
+
+function renderTabs() {
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  const list = students();
+  if (activeTab !== 'problem' && !list.some((s) => s.id === activeTab)) { activeTab = 'problem'; renderPane(false); }
+  const mk = (id, label) => {
+    const b = document.createElement('button'); b.textContent = label; b.dataset.tab = id;
+    if (id === activeTab) b.className = 'active';
+    b.onclick = () => { activeTab = id; renderTabs(); renderPane(false); };
+    tabs.appendChild(b);
+  };
+  mk('problem', '📋 Problem');
+  if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No students yet'; tabs.appendChild(e); }
+  for (const s of list) mk(s.id, (s.id === MY_ID ? 'You' : s.name) + (s.hand ? ' ✋' : '') + (board.spotlight === s.id ? ' 🔦' : ''));
+  $('spotLabel').textContent = board.spotlight ? `🔦 Spotlight: ${nameOf(board.spotlight)}` : '';
+}
+
+function button(label, cls, onClick) { const b = document.createElement('button'); b.className = 'btn ' + (cls || ''); b.textContent = label; b.onclick = onClick; return b; }
+
+function renderPane(liveUpdate) {
+  const title = $('paneTitle'), view = $('problemView'), edit = $('problemEdit'), wrap = $('editorWrap'), out = $('output');
+  title.innerHTML = '';
+  const who = document.createElement('span'); who.className = 'who'; title.appendChild(who);
+  if (activeTab === 'problem') {
+    who.textContent = 'Problem';
+    wrap.classList.add('hidden'); out.classList.add('hidden');
+    if (isProfessor()) {
+      view.classList.add('hidden'); edit.classList.remove('hidden');
+      if (!liveUpdate) edit.value = board.problem;
+      title.appendChild(button('Post to whiteboard', 'primary', () => { board.problem = edit.value.slice(0, 2000); sendBoard(); drawBoard(); note('Problem posted.'); }));
+      if (board.spotlight) title.appendChild(button('Clear spotlight', '', () => { board.spotlight = null; sendBoard(); refreshUI(); }));
+    } else {
+      edit.classList.add('hidden'); view.classList.remove('hidden');
+      view.textContent = board.problem || (professorId ? 'The professor has not posted a problem yet.' : 'No professor yet.');
     }
     return;
   }
+  view.classList.add('hidden'); edit.classList.add('hidden'); wrap.classList.remove('hidden');
+  const mine = activeTab === MY_ID;
+  const pane = panes.get(activeTab) || { text: '', output: '', error: false };
+  who.textContent = mine ? 'Your code' : `${nameOf(activeTab)}'s code (live, read-only)`;
+  title.appendChild(button('▶ Run', 'primary', () => runPane(activeTab)));
+  if (isProfessor()) {
+    const on = board.spotlight === activeTab;
+    title.appendChild(button(on ? 'Clear spotlight' : '🔦 Spotlight on board', on ? '' : 'primary', () => {
+      board.spotlight = on ? null : activeTab; sendBoard(); refreshUI();
+    }));
+  }
+  cm.setOption('readOnly', mine ? false : 'nocursor');
+  if (cm.getValue() !== pane.text) {
+    const scroll = cm.getScrollInfo(); cm.setValue(pane.text); if (liveUpdate) cm.scrollTo(scroll.left, scroll.top);
+  }
+  if (!liveUpdate) { cm.clearHistory(); setTimeout(() => { cm.refresh(); if (mine) cm.focus(); }, 0); }
+  const local = localRuns.get(activeTab);
+  const shown = local ? local.out : pane.output;
+  out.classList.toggle('hidden', !shown);
+  out.classList.toggle('err', local ? local.error : pane.error);
+  out.textContent = shown || '';
+}
+
+// Pyodide runs in a Web Worker so a runaway loop can be stopped.
+const localRuns = new Map(); // output of someone else's code that I ran on my computer
+let worker = null, workerReady = null;
+function getWorker() {
+  if (workerReady) return workerReady;
+  const src = `importScripts(${JSON.stringify(PYODIDE_URL + 'pyodide.js')});
+    const ready = loadPyodide({ indexURL: ${JSON.stringify(PYODIDE_URL)} });
+    onmessage = async (e) => {
+      const py = await ready; let out = ''; let error = false;
+      py.setStdout({ batched: (s) => { out += s + '\\n'; } });
+      py.setStderr({ batched: (s) => { out += s + '\\n'; } });
+      try { await py.runPythonAsync(e.data); } catch (err) {
+        error = true;
+        const lines = String(err.message || err).trim().split('\\n');
+        const at = lines.findIndex((l) => l.includes('File "<exec>"'));
+        out += (at >= 0 ? lines.slice(at) : lines.slice(-4)).join('\\n');
+      }
+      postMessage({ out: out.slice(0, 4000), error });
+    };
+    ready.then(() => postMessage({ ready: true }), (err) => postMessage({ failed: String(err) }));`;
+  worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  workerReady = new Promise((resolve, reject) => {
+    worker.onmessage = (e) => { if (e.data.ready) resolve(worker); else if (e.data.failed) reject(new Error('Python failed to load: ' + e.data.failed)); };
+    worker.onerror = () => reject(new Error('Python failed to load. Check your connection.'));
+  });
+  workerReady.catch(() => { worker = null; workerReady = null; });
+  return workerReady;
+}
+async function runPane(id) {
+  const out = $('output'), pane = panes.get(id); if (!pane) return;
+  out.classList.remove('hidden', 'err');
+  out.textContent = worker ? 'Running…' : 'Loading Python (the first run takes a few seconds)…';
+  let result;
+  try {
+    const w = await getWorker();
+    result = await new Promise((resolve) => {
+      const t = setTimeout(() => { w.terminate(); worker = null; workerReady = null; resolve({ out: 'Stopped: the code ran longer than 10 seconds.', error: true }); }, 10000);
+      w.onmessage = (e) => { if (!e.data.ready) { clearTimeout(t); resolve(e.data); } };
+      w.postMessage(pane.text);
+    });
+  } catch (err) { result = { out: String(err.message || err), error: true }; }
+  const text = result.out.trim() || '(no output)';
+  if (id === MY_ID) {
+    pane.output = text; pane.error = result.error;
+    send('code', { text: pane.text, output: pane.output, error: pane.error });
+    if (board.spotlight === MY_ID) drawBoard();
+  } else localRuns.set(id, { out: text + '\n(ran on your computer only)', error: result.error });
+  if (activeTab === id && boardOpen()) renderPane(true);
+}
+
+// ================= Input =================
+const keys = new Set();
+const chatInput = $('chatInput');
+addEventListener('keydown', (e) => {
+  if (!joined) return;
+  if (boardOpen()) { if (e.key === 'Escape') closeBoard(); return; }
   if (document.activeElement === chatInput) {
-    if (e.key === 'Escape') chatInput.blur();
+    if (e.key === 'Enter') {
+      const text = chatInput.value.trim().slice(0, 200);
+      if (text) { send('chat', { text }); showBubble(MY_ID, text); logChat(MY_ID, text); }
+      chatInput.value = ''; chatInput.blur();
+    } else if (e.key === 'Escape') chatInput.blur();
     return;
   }
-  if (e.key.startsWith('Arrow')) { e.preventDefault(); keys.add(e.key); zoomId = null; }
+  if (e.key === 'Enter') { e.preventDefault(); chatInput.focus(); return; }
+  if (e.key === 'h' || e.key === 'H') return setHand(!me.hand);
+  if (e.key === 'b' || e.key === 'B') return openBoard();
   if (e.key === 'Escape') zoomId = null;
+  if (e.key.startsWith('Arrow')) { e.preventDefault(); keys.add(e.key); zoomId = null; if (me.seat != null) standUp(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key));
 addEventListener('blur', () => keys.clear());
 
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
 renderer.domElement.addEventListener('click', (e) => {
-  if (!me) return;
+  if (!joined) return;
   chatInput.blur();
   mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(mouse, camera);
-  const hit = raycaster.intersectObjects(pickables, false)[0];
-  zoomId = hit ? hit.object.userData.id : null;
+  const hit = raycaster.intersectObjects([boardMesh, ...pickables, ...chairMeshes], false)[0];
+  if (!hit) { zoomId = null; return; }
+  if (hit.object === boardMesh) return openBoard(board.spotlight || undefined);
+  if (hit.object.userData.seat != null) return sitDown(hit.object.userData.seat);
+  if (hit.object.userData.id) zoomId = hit.object.userData.id;
 });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-// ---------- Loop ----------
+// ================= Loop =================
 const clock = new THREE.Clock();
-const camGoal = new THREE.Vector3(), lookGoal = new THREE.Vector3(), look = new THREE.Vector3(0, 1, 0);
-const tmp = new THREE.Vector3();
-let lastSent = 0, dirty = false;
-const SPEED = 5, LIMIT = 19;
-
+const camGoal = new THREE.Vector3(), lookGoal = new THREE.Vector3(), look = new THREE.Vector3(0, 1.5, -4), tmp = new THREE.Vector3();
+let lastSent = 0, moveDirty = false;
+const SPEED = 4.5;
 function collide(x, z) {
-  const solids = [{ x: 0, z: 0, r: FIRE_R }, ...trees];
-  for (const t of solids) {
-    const dx = x - t.x, dz = z - t.z, d = Math.hypot(dx, dz), min = t.r + 0.35;
-    if (d < min && d > 0.0001) { x = t.x + (dx / d) * min; z = t.z + (dz / d) * min; }
+  x = Math.max(-ROOM.w / 2 + 0.5, Math.min(ROOM.w / 2 - 0.5, x));
+  z = Math.max(-ROOM.d / 2 + 1, Math.min(ROOM.d / 2 - 0.5, z));
+  for (const b of solids) {
+    const dx = x - b.x, dz = z - b.z, px = b.hw + 0.3 - Math.abs(dx), pz = b.hd + 0.3 - Math.abs(dz);
+    if (px > 0 && pz > 0) { if (px < pz) x += Math.sign(dx || 1) * px; else z += Math.sign(dz || 1) * pz; }
   }
-  const r = Math.hypot(x, z);
-  if (r > LIMIT) { x *= LIMIT / r; z *= LIMIT / r; }
   return [x, z];
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
-
-  // Fire flicker
-  flames.forEach((f, i) => {
-    const s = 1 + Math.sin(t * (9 + i * 3) + i) * 0.12 + Math.sin(t * 23 + i * 2) * 0.06;
-    f.scale.set(1 / Math.sqrt(s), s, 1 / Math.sqrt(s));
-    f.position.y = 0.2 + (f.userData.h * s) / 2;
-    f.rotation.y = t * (1 + i);
-  });
-  fireLight.intensity = 26 + Math.sin(t * 13) * 3 + Math.sin(t * 31) * 2;
-
-  // My movement
-  const mine = me && players.get(me.id);
-  if (mine) {
+  const mine = joined && players.get(MY_ID);
+  if (mine && me.seat == null) {
     let dx = 0, dz = 0;
     if (keys.has('ArrowUp')) dz -= 1;
     if (keys.has('ArrowDown')) dz += 1;
@@ -400,68 +756,52 @@ function animate() {
     if (dx || dz) {
       const len = Math.hypot(dx, dz);
       const [nx, nz] = collide(mine.target.x + (dx / len) * SPEED * dt, mine.target.z + (dz / len) * SPEED * dt);
-      mine.target = { id: me.id, x: nx, z: nz, ry: Math.atan2(dx, dz) };
-      dirty = true;
+      mine.target = { x: nx, z: nz, ry: Math.atan2(dx, dz) };
+      moveDirty = posDirty = true;
     }
-    if (dirty && t - lastSent > 0.1) {
-      net.move(mine.target);
-      lastSent = t; dirty = false;
-    }
+    if (moveDirty && t - lastSent > 0.1) { send('move', mine.target); lastSent = t; moveDirty = false; }
   }
-
-  // Smoothly move every character toward its target
-  for (const pl of players.values()) {
-    const g = pl.group, tg = pl.target;
-    const isMe = me && pl.data.id === me.id;
-    const k = isMe ? 1 : 1 - Math.exp(-12 * dt);
-    const moving = Math.hypot(tg.x - g.position.x, tg.z - g.position.z) > 0.01 || (isMe && keys.size);
+  for (const [id, v] of players) {
+    const g = v.group, tg = v.target, seated = (id === MY_ID ? me?.seat : v.meta.seat) != null;
+    const k = id === MY_ID ? 1 : 1 - Math.exp(-12 * dt);
+    const moving = Math.hypot(tg.x - g.position.x, tg.z - g.position.z) > 0.01;
     g.position.x += (tg.x - g.position.x) * k;
     g.position.z += (tg.z - g.position.z) * k;
-    let dr = tg.ry - g.rotation.y;
-    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    let dr = tg.ry - g.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
     g.rotation.y += dr * (1 - Math.exp(-14 * dt));
-    pl.bob = moving ? pl.bob + dt * 12 : pl.bob * 0.85;
-    g.position.y = Math.abs(Math.sin(pl.bob)) * 0.08;
+    v.bob = moving && !seated ? v.bob + dt * 12 : v.bob * 0.85;
+    g.position.y = seated ? -0.18 : Math.abs(Math.sin(v.bob)) * 0.07;
   }
-
-  // Camera: follow me, or glide close to the person I clicked
+  // Camera: behind me, facing the whiteboard; or close to someone I clicked.
   const focus = players.get(zoomId) || mine;
   if (focus) {
     const fp = focus.group.position;
     if (zoomId && players.has(zoomId)) {
       tmp.set(camera.position.x - fp.x, 0, camera.position.z - fp.z);
       if (tmp.lengthSq() < 0.01) tmp.set(0, 0, 1);
-      tmp.normalize().multiplyScalar(3.2);
-      camGoal.set(fp.x + tmp.x, 2.1, fp.z + tmp.z);
-      lookGoal.set(fp.x, 1.3, fp.z);
+      tmp.normalize().multiplyScalar(3);
+      camGoal.set(fp.x + tmp.x, 2, fp.z + tmp.z); lookGoal.set(fp.x, 1.25, fp.z);
     } else {
-      camGoal.set(fp.x, fp.y + 8, fp.z + 11);
-      lookGoal.set(fp.x, 1, fp.z);
+      camGoal.set(fp.x * 0.6, 4.6, Math.min(fp.z + 6.5, ROOM.d / 2 - 0.3)); lookGoal.set(fp.x * 0.5, 1.4, fp.z - 4);
     }
     const c = 1 - Math.exp(-4 * dt);
-    camera.position.lerp(camGoal, c);
-    look.lerp(lookGoal, c);
-    camera.lookAt(look);
+    camera.position.lerp(camGoal, c); look.lerp(lookGoal, c); camera.lookAt(look);
   } else {
-    // Before joining: slow orbit around the fire
-    camera.position.set(Math.sin(t * 0.1) * 14, 8, Math.cos(t * 0.1) * 14);
-    camera.lookAt(0, 1, 0);
+    camera.position.set(Math.sin(t * 0.15) * 3, 5, 8.5); camera.lookAt(0, 1.8, -5);
   }
-
   renderer.render(scene, camera);
-
-  // Name tags and bubbles follow heads on screen
-  for (const pl of players.values()) {
-    tmp.copy(pl.group.position); tmp.y += 1.85;
-    tmp.project(camera);
-    const visible = tmp.z < 1;
-    pl.tag.style.display = visible ? '' : 'none';
-    if (visible) pl.tag.style.left = ((tmp.x + 1) / 2) * innerWidth + 'px', pl.tag.style.top = ((1 - tmp.y) / 2) * innerHeight + 'px';
+  for (const v of players.values()) {
+    tmp.copy(v.group.position); tmp.y += 1.85; tmp.project(camera);
+    const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.2 && Math.abs(tmp.y) < 1.2;
+    v.tag.style.display = vis ? '' : 'none';
+    if (vis) { v.tag.style.left = ((tmp.x + 1) / 2) * innerWidth + 'px'; v.tag.style.top = ((1 - tmp.y) / 2) * innerHeight + 'px'; }
   }
 }
+drawBoard();
 animate();
+connect();
 
-window.__fc = { players, camera, get me() { return me; }, get zoomId() { return zoomId; } };
+window.__pc = { players, panes, board, camera, seats, chairMeshes, boardMesh, cm, get roster() { return roster; }, get me() { return me; }, get professorId() { return professorId; }, get zoomId() { return zoomId; }, get activeTab() { return activeTab; } };
 </script>
 </body>
 </html>

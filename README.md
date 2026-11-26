@@ -1,36 +1,29 @@
-# Forest Chat
+# PyCampus Classroom
 
-A small 3D web space: a forest clearing with a campfire where up to 10 people walk around and chat.
+A small 3D web classroom for practicing Python together. Students and one professor join from a link, take a seat, write Python in live code panes that everyone can watch, and run it in the browser. The professor posts problems on the whiteboard and spotlights a student's code for the whole room.
 
-## Run it
+**Live demo:** https://py-campus.vercel.app
 
-Needs [Node.js](https://nodejs.org) 18 or newer. No `npm install`.
+- [Project overview and agreed features](docs/overview.md)
+- [System architecture (planned Python/FastAPI version)](docs/architecture.md)
+- [UML class diagrams](docs/uml.md)
 
-```
-node server.js
-```
+## How to use it
 
-Open the link it prints (http://localhost:3000). Open it in a second window to see two characters. Others on the same Wi‑Fi can join with the "On your network" link.
+1. Open the link, type a nickname, and pick **Student** or **Professor**. Only one professor at a time; the button is disabled while someone holds it.
+2. **Arrow keys** walk. **Click a chair** to sit; arrows stand you up.
+3. **Enter** to chat. **H** raises or lowers your hand.
+4. **B** (or click the whiteboard) opens the board:
+   - **Students** write code in their own tab and press **Run**. Everyone can watch every student's tab live.
+   - **The professor** writes a problem in the Problem tab and posts it, and can **Spotlight** any student's tab onto the big board.
+5. When the professor leaves, the spotlight clears and anyone can take the professor role. The class keeps going.
 
-## Put it online (Vercel + Supabase)
+Up to 10 people. No login and nothing is saved.
 
-Vercel only serves static pages, so live syncing goes through Supabase Realtime (free tier) instead of `server.js`.
+## How it's built (demo version)
 
-1. Create a free project at [supabase.com](https://supabase.com). No tables are needed.
-2. In Project Settings → API, copy the **Project URL** and the **anon / publishable key**.
-3. Paste them into `SUPABASE_URL` and `SUPABASE_KEY` near the networking section of `index.html`. The anon key is meant to be public. Never use the `service_role` / secret key.
-4. On [vercel.com/new](https://vercel.com/new), import this repo. Framework preset: **Other**, no build command. Deploy.
+- `index.html` is the whole app: three.js for the 3D room, CodeMirror for the editor, and Pyodide (Python compiled to WebAssembly) in a Web Worker to run code. Runs stop after 10 seconds.
+- Hosted on Vercel as a static page. Live sync goes through **Supabase Realtime**: presence for who's here (name, role, seat, hand), broadcast for movement, chat, code and the whiteboard. The Supabase URL and anon/publishable key in `index.html` are public by design.
+- `server.js` is an optional local relay: `node server.js` (Node 18+, no install), then open http://localhost:3000. It stands in for Supabase so you can run the classroom offline on one network. Browsers allow about 6 open connections per site, so use separate browsers or devices for more than 5 people in local mode.
 
-With those two values empty, the page talks to `server.js` instead, so local play still works.
-
-## Controls
-
-- **Arrow keys**: walk
-- **Enter**: open chat, type, Enter again to send. Speech bubbles disappear after 5 seconds.
-- **Click a person** (or their name tag): the camera moves close to them. Arrow keys or Esc return to the normal view.
-
-## Notes
-
-- Three files: `server.js` (plain Node web server, live updates over Server-Sent Events), `index.html` (the whole 3D page, three.js from a CDN, optional Supabase Realtime), and this README.
-- No login, payment or personal data. Nicknames live only in memory while the server runs.
-- Max 10 people at once; the 11th sees a "campfire is full" message.
+The planned Python version replaces Supabase with a FastAPI WebSocket server that holds the room state in Python classes; see the docs above.
