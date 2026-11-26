@@ -200,8 +200,8 @@ function showBubble(id, text) {
 //  1) Supabase Realtime, when the two values below are filled in (for static hosting such as Vercel).
 //  2) Otherwise the bundled server.js (run `node server.js`), using Server-Sent Events.
 // The Supabase "anon" / "publishable" key is designed to be public; never put a secret/service key here.
-const SUPABASE_URL = '';
-const SUPABASE_KEY = '';
+const SUPABASE_URL = 'https://drsrjhuoehjznlbzbowm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_K7bKtSkEoOR72vaM5Osweg_o73aCWNc';
 const MAX_PLAYERS = 10;
 
 const countEl = document.getElementById('count');
@@ -241,7 +241,7 @@ function connectServer(name) {
 async function connectSupabase(name) {
   let createClient;
   try {
-    ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm'));
+    ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm'));
   } catch { return on.error('Could not load the chat service. Check your connection and reload.'); }
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
   const id = Math.random().toString(16).slice(2, 10);
