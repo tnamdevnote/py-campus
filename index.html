@@ -243,7 +243,8 @@ async function connectSupabase(name) {
   try {
     ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm'));
   } catch { return on.error('Could not load the chat service. Check your connection and reload.'); }
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  // worker: keeps the connection's heartbeat running even when the tab is in the background.
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { worker: true } });
   const id = Math.random().toString(16).slice(2, 10);
   const angle = Math.random() * Math.PI * 2;
   const you = {
@@ -256,7 +257,7 @@ async function connectSupabase(name) {
   let joined = false, moved = false;
 
   // Presence = who is here. The first 10 to arrive are in; anyone later gets "full".
-  ch.on('presence', { event: 'sync' }, () => {
+  const reconcile = () => {
     const list = Object.values(ch.presenceState()).map((metas) => metas[0]).filter((p) => p && p.id)
       .sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1)).slice(0, MAX_PLAYERS);
     if (!joined) {
@@ -271,15 +272,24 @@ async function connectSupabase(name) {
     const ids = new Set(list.map((p) => p.id));
     for (const p of list) if (!known.has(p.id)) { known.add(p.id); on.join(p); }
     for (const k of [...known]) if (!ids.has(k)) { known.delete(k); on.leave(k); }
-  });
-  ch.on('broadcast', { event: 'move' }, ({ payload }) => known.has(payload.id) && payload.id !== id && on.move(payload));
-  ch.on('broadcast', { event: 'chat' }, ({ payload }) => known.has(payload.id) && on.chat(payload));
+  };
+  ch.on('presence', { event: 'sync' }, reconcile);
+  // A message from someone I don't have yet means my list is stale: re-check who is here.
+  const fromKnown = (pid) => known.has(pid) || (reconcile(), known.has(pid));
+  ch.on('broadcast', { event: 'move' }, ({ payload }) => payload.id !== id && fromKnown(payload.id) && on.move(payload));
+  ch.on('broadcast', { event: 'chat' }, ({ payload }) => fromKnown(payload.id) && on.chat(payload));
   ch.subscribe((status) => {
     if (status === 'SUBSCRIBED') ch.track(you);
     else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') on.error('Could not reach the chat service. Reload to try again.');
   });
   // Refresh my saved position now and then so newcomers see me in the right place.
-  setInterval(() => { if (joined && moved) { moved = false; ch.track(you); } }, 3000);
+  // Also re-announce every 15s when idle, so anyone whose list dropped me picks me back up.
+  let lastTrack = Date.now();
+  setInterval(() => {
+    if (joined && (moved || Date.now() - lastTrack > 15000)) { moved = false; lastTrack = Date.now(); ch.track(you); }
+    if (joined) reconcile();
+  }, 3000);
+  window.__fc.channel = ch;
   net.move = (d) => {
     Object.assign(you, { x: d.x, z: d.z, ry: d.ry }); moved = true;
     ch.send({ type: 'broadcast', event: 'move', payload: { id, x: d.x, z: d.z, ry: d.ry } });
